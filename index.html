@@ -3,128 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Financeiro Cloud</title>
+    <title>Controle Financeiro Automático</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 min-h-screen p-4">
-    <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+<body class="bg-slate-100 p-4 font-sans">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
         <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
             <div>
-                <h1 class="text-2xl font-bold">Financeiro Sincronizado</h1>
-                <p id="status" class="text-blue-200 text-xs italic font-bold">Nuvem: Conectando...</p>
+                <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
+                <p id="status" class="text-blue-200 text-xs italic">Pronto para iniciar</p>
             </div>
             <div class="flex gap-2">
-                <button onclick="aba('lancamentos')" class="bg-blue-700 px-3 py-1 rounded">Lançar</button>
-                <button onclick="aba('categorias')" class="bg-blue-700 px-3 py-1 rounded">Categorias</button>
+                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1 rounded hover:bg-blue-800">Início</button>
+                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1 rounded hover:bg-blue-800">Categorias</button>
+                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1 rounded hover:bg-green-600">Importar JSON</button>
+                <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
             </div>
         </header>
 
-        <div id="conteudo-lancamentos" class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="p-4 bg-red-50 rounded-xl border border-red-100">
-                    <span class="text-xs text-gray-400 font-bold uppercase">Unicred</span>
-                    <p class="text-xl font-mono font-bold text-red-600">-R$ 8.038,12</p>
-                </div>
-                <div class="p-4 bg-orange-50 rounded-xl border border-orange-100">
-                    <span class="text-xs text-gray-400 font-bold uppercase">Caixa</span>
-                    <p class="text-xl font-mono font-bold text-red-600">-R$ 2.458,67</p>
-                </div>
-                <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                    <span class="text-xs text-gray-400 font-bold uppercase">Cartão (Mês)</span>
-                    <p id="totalFaturas" class="text-xl font-mono font-bold text-blue-700">R$ 0,00</p>
-                </div>
+        <main id="conteudo-lancamentos" class="p-6">
+            <div id="corpoTabela" class="space-y-4">
+                <p class="text-gray-400 text-center">Clique em Importar JSON para carregar os dados iniciais.</p>
             </div>
+        </main>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
-                    <tbody id="corpoTabela"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="conteudo-categorias" class="p-6 hidden">
-            <h2 class="text-xl font-bold mb-4">Categorias</h2>
+        <main id="conteudo-categorias" class="p-6 hidden">
+            <h2 class="font-bold mb-4">Gerenciar Categorias</h2>
             <div class="flex gap-2 mb-4">
-                <input type="text" id="novaCat" class="border p-2 flex-1 rounded">
-                <button onclick="addCategoria()" class="bg-blue-600 text-white px-4 rounded">Add</button>
+                <input type="text" id="novaCat" class="border p-2 flex-1 rounded" placeholder="Nova Categoria">
+                <button onclick="addCat()" class="bg-blue-600 text-white px-4 rounded">Adicionar</button>
             </div>
-            <ul id="listaCat" class="space-y-2"></ul>
-        </div>
+            <ul id="listaCat" class="divide-y border-t"></ul>
+        </main>
     </div>
 
     <script>
-        // CONFIGURAÇÃO IMPORTANTE
-        const BLOB_TOKEN = "COLE_AQUI_SEU_TOKEN_DO_VERCEL_BLOB";
-        const BLOB_URL = "https://financeiro.public.blob.vercel-storage.com/dados.json";
+        // --- CONFIGURAÇÃO CRÍTICA ---
+        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI"; 
+        // ----------------------------
 
-        let dados = { transacoes: [], categorias: ["Moradia", "Alimentação", "Veículo", "Encargos"] };
+        let BL_URL = localStorage.getItem('url_ativa') || "";
+        let dados = { categorias: [], transacoes: [] };
 
-        // 1. BAIXAR DADOS DA NUVEM AO INICIAR
-        async function carregarDaNuvem() {
-            try {
-                const response = await fetch(BLOB_URL);
-                if (response.ok) {
-                    dados = await response.json();
-                    document.getElementById('status').innerText = "Nuvem: Sincronizado";
-                    render();
-                }
-            } catch (e) {
-                document.getElementById('status').innerText = "Nuvem: Erro ao baixar";
-                console.error("Erro ao carregar", e);
-            }
+        // Troca de abas
+        function aba(n) {
+            document.getElementById('conteudo-lancamentos').classList.toggle('hidden', n !== 'lancamentos');
+            document.getElementById('conteudo-categorias').classList.toggle('hidden', n !== 'categorias');
+            if(n === 'categorias') renderCat();
         }
 
-        // 2. SALVAR NA NUVEM (UPLOAD)
-        async function salvarNaNuvem() {
-            document.getElementById('status').innerText = "Nuvem: Salvando...";
+        // Salva os dados no Vercel Blob
+        async function salvar() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "Sincronizando com a nuvem...";
+            
             try {
-                await fetch(BLOB_URL, {
+                const targetUrl = BL_URL || `https://blob.vercel-storage.com/dados_financeiros.json`;
+                const res = await fetch(targetUrl, {
                     method: 'PUT',
                     body: JSON.stringify(dados),
-                    headers: {
-                        'Authorization': `Bearer ${BLOB_TOKEN}`,
-                        'x-cp-content-type': 'application/json'
+                    headers: { 
+                        'Authorization': `Bearer ${TOKEN}`, 
+                        'x-cp-content-type': 'application/json' 
                     }
                 });
-                document.getElementById('status').innerText = "Nuvem: Salvo com sucesso!";
-            } catch (e) {
-                document.getElementById('status').innerText = "Nuvem: Erro ao salvar";
+
+                const result = await res.json();
+                
+                if (!BL_URL) {
+                    BL_URL = result.url;
+                    localStorage.setItem('url_ativa', BL_URL);
+                }
+                
+                statusEl.innerText = "Sincronizado!";
+                render();
+            } catch (err) {
+                statusEl.innerText = "Erro ao salvar na nuvem.";
+                console.error(err);
             }
         }
 
-        function aba(nome) {
-            document.getElementById('conteudo-lancamentos').classList.toggle('hidden', nome !== 'lancamentos');
-            document.getElementById('conteudo-categorias').classList.toggle('hidden', nome !== 'categorias');
-            if(nome === 'categorias') renderCategorias();
+        // Importa o arquivo JSON gerado pelo Claude
+        function importarDados(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    dados = JSON.parse(ev.target.result);
+                    salvar();
+                } catch (err) {
+                    alert("Erro ao ler o arquivo JSON.");
+                }
+            };
+            reader.readAsText(e.target.files[0]);
         }
 
+        // Renderiza a lista de transações e a explosão do cartão
         function render() {
-            const corpo = document.getElementById('corpoTabela');
-            let html = '';
-            let total = 0;
+            const c = document.getElementById('corpoTabela');
+            if (dados.transacoes.length === 0) return;
 
-            dados.transacoes.forEach((t, i) => {
-                if(t.subitens) total += t.valor;
-                html += `
-                    <tr class="border-b" onclick="toggle(${i})">
-                        <td class="py-3 text-sm">${t.data}</td>
-                        <td class="py-3">
-                            <span class="block font-medium">${t.desc}</span>
-                            <span class="text-[10px] text-gray-400 uppercase">${t.categoria}</span>
-                        </td>
-                        <td class="py-3 text-right font-mono ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
-                            R$ ${Math.abs(t.valor).toLocaleString('pt-BR')}
-                        </td>
-                    </tr>
-                `;
-                if(t.aberto && t.subitens) {
-                    t.subitens.forEach(s => {
-                        html += `<tr class="bg-slate-50 italic text-xs text-gray-500"><td colspan="2" class="p-2 pl-6">${s.desc}</td><td class="text-right p-2">R$ ${s.valor}</td></tr>`;
-                    });
-                }
-            });
-            corpo.innerHTML = html;
-            document.getElementById('totalFaturas').innerText = `R$ ${Math.abs(total).toLocaleString('pt-BR')}`;
+            c.innerHTML = dados.transacoes.map((t, i) => `
+                <div class="border-b pb-3 pt-1 cursor-pointer hover:bg-slate-50" onclick="toggle(${i})">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-slate-700">
+                            ${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''} ${t.desc}
+                        </span>
+                        <span class="font-mono font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
+                            R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </span>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
+                        <span>${t.data}</span>
+                        <span>${t.categoria}</span>
+                    </div>
+                    ${t.aberto && t.subitens ? `
+                        <div class="mt-2 ml-4 border-l-2 border-blue-100 pl-3 space-y-1">
+                            ${t.subitens.map(s => `
+                                <div class="flex justify-between text-sm italic text-slate-500">
+                                    <span>${s.desc} <small class="not-italic text-[9px] bg-slate-100 px-1 rounded">${s.categoria}</small></span>
+                                    <span>R$ ${s.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
         }
 
         function toggle(i) {
@@ -134,8 +137,44 @@
             }
         }
 
-        // Chamar carga inicial
-        carregarDaNuvem();
+        function renderCat() {
+            document.getElementById('listaCat').innerHTML = dados.categorias.map(cat => `
+                <li class="py-3 flex justify-between items-center text-slate-600">
+                    ${cat} 
+                    <button onclick="delCat('${cat}')" class="text-red-400 hover:text-red-600 text-xs font-bold uppercase">Excluir</button>
+                </li>
+            `).join('');
+        }
+
+        function addCat() {
+            const v = document.getElementById('novaCat').value;
+            if(v) {
+                dados.categorias.push(v);
+                document.getElementById('novaCat').value = "";
+                salvar();
+                renderCat();
+            }
+        }
+
+        function delCat(cat) {
+            dados.categorias = dados.categorias.filter(c => c !== cat);
+            salvar();
+            renderCat();
+        }
+
+        // Tentar carregar dados da nuvem automaticamente ao abrir o app
+        if(BL_URL && TOKEN !== "COLE_AQUI_SEU_TOKEN_DA_VERCEL") {
+            fetch(BL_URL + '?t=' + Date.now())
+                .then(r => r.json())
+                .then(d => {
+                    dados = d;
+                    document.getElementById('status').innerText = "Nuvem: Conectado";
+                    render();
+                })
+                .catch(() => {
+                    document.getElementById('status').innerText = "Nuvem: Offline (Use Importar)";
+                });
+        }
     </script>
 </body>
 </html>
