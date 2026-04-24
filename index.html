@@ -58,7 +58,7 @@
 
         // Salvar na Nuvem (Vercel Blob)
         async function salvar() {
-            if (TOKEN.includes("BLOB_READ_WRITE_TOKEN="vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI")) {
+            if (TOKEN.includes("vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI")) {
                 alert("Erro: Você esqueceu de colar o TOKEN da Vercel no código!");
                 return;
             }
@@ -68,7 +68,7 @@
             
             try {
                 // Se não temos URL, enviamos para o endpoint padrão para criar o arquivo
-                const targetUrl = BL_URL || `https://blob.vercel-storage.com/dados.json`;
+                const targetUrl = BL_URL || `https://blob.vercel-storage.com/dados_financeiros.json`;
                 
                 const res = await fetch(targetUrl, {
                     method: 'PUT',
