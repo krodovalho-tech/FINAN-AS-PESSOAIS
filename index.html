@@ -3,101 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Financeiro Automático</title>
+    <title>Financeiro Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 p-4">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
-            <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
+<body class="bg-slate-100 p-4 font-sans text-slate-800">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px]">
+        <header class="bg-blue-600 p-6 text-white flex justify-between items-center shadow-lg">
+            <div>
+                <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
+                <p id="status" class="text-blue-100 text-xs italic font-semibold">Iniciando...</p>
+            </div>
             <div class="flex gap-2">
-                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1 rounded">Início</button>
-                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1 rounded">Categorias</button>
-                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1 rounded">Importar JSON</button>
+                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-800 transition">Início</button>
+                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-800 transition">Categorias</button>
+                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1.5 rounded-lg hover:bg-green-600 transition font-bold">Importar JSON</button>
                 <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
             </div>
         </header>
 
-        <div id="status" class="bg-yellow-100 text-yellow-800 text-center text-xs p-1">Pronto para iniciar</div>
-
         <main id="conteudo-lancamentos" class="p-6">
-            <div id="corpoTabela" class="space-y-4"></div>
+            <div id="corpoTabela" class="space-y-4">
+                <div class="text-center py-10">
+                    <p class="text-slate-400">Clique em "Importar JSON" para carregar os dados detalhados que o Claude te enviou.</p>
+                </div>
+            </div>
         </main>
 
         <main id="conteudo-categorias" class="p-6 hidden">
-            <div class="flex gap-2 mb-4">
-                <input type="text" id="novaCat" class="border p-2 flex-1 rounded" placeholder="Nova Categoria">
-                <button onclick="addCat()" class="bg-blue-600 text-white px-4 rounded">Add</button>
+            <h2 class="text-lg font-bold mb-4 text-blue-600">Configurar Categorias</h2>
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="novaCat" class="border p-2 flex-1 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Ex: Assinaturas">
+                <button onclick="addCat()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700">Adicionar</button>
             </div>
-            <ul id="listaCat" class="divide-y"></ul>
+            <ul id="listaCat" class="divide-y border rounded-lg overflow-hidden bg-slate-50"></ul>
         </main>
     </div>
 
     <script>
-        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI";
-        let BL_URL = localStorage.getItem('url_ativa') || "";
-        let dados = { categorias: [], transacoes: [] };
+        // ==========================================
+        // CONFIGURAÇÃO DO TOKEN VERCEL
+        // ==========================================
+        const TOKEN = "COLE_AQUI_SEU_TOKEN_DA_VERCEL"; 
+        // ==========================================
 
+        let BL_URL = localStorage.getItem('url_ativa') || "";
+        let dados = { categorias: ["Moradia", "Alimentação", "Lazer", "Veículo", "Saúde"], transacoes: [] };
+
+        // Trocar de Visualização
         function aba(n) {
             document.getElementById('conteudo-lancamentos').classList.toggle('hidden', n !== 'lancamentos');
             document.getElementById('conteudo-categorias').classList.toggle('hidden', n !== 'categorias');
-            if(n==='categorias') renderCat();
+            if(n === 'categorias') renderCat();
         }
 
+        // Salvar na Nuvem (Vercel Blob)
         async function salvar() {
-            document.getElementById('status').innerText = "Salvando na nuvem...";
-            const res = await fetch(BL_URL || `https://blob.vercel-storage.com/dados.json`, {
-                method: 'PUT',
-                body: JSON.stringify(dados),
-                headers: { 'Authorization': `Bearer ${TOKEN}`, 'x-cp-content-type': 'application/json' }
-            });
-            const d = await res.json();
-            if(!BL_URL) { BL_URL = d.url; localStorage.setItem('url_ativa', BL_URL); }
-            document.getElementById('status').innerText = "Sincronizado!";
-            render();
+            if (TOKEN.includes("COLE_AQUI")) {
+                alert("Erro: Você esqueceu de colar o TOKEN da Vercel no código!");
+                return;
+            }
+
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "Sincronizando...";
+            
+            try {
+                // Se não temos URL, enviamos para o endpoint padrão para criar o arquivo
+                const targetUrl = BL_URL || `https://blob.vercel-storage.com/dados.json`;
+                
+                const res = await fetch(targetUrl, {
+                    method: 'PUT',
+                    body: JSON.stringify(dados),
+                    headers: { 
+                        'Authorization': `Bearer ${TOKEN}`, 
+                        'x-cp-content-type': 'application/json' 
+                    }
+                });
+
+                const result = await res.json();
+                
+                if (!BL_URL) {
+                    BL_URL = result.url;
+                    localStorage.setItem('url_ativa', BL_URL);
+                }
+                
+                statusEl.innerText = "Sincronizado com Sucesso!";
+                render();
+            } catch (err) {
+                statusEl.innerText = "Erro ao salvar na nuvem.";
+                console.error(err);
+            }
         }
 
+        // Importar o JSON inicial
         function importarDados(e) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                dados = JSON.parse(ev.target.result);
-                salvar();
+                try {
+                    dados = JSON.parse(ev.target.result);
+                    salvar();
+                } catch (err) {
+                    alert("Arquivo JSON inválido.");
+                }
             };
             reader.readAsText(e.target.files[0]);
         }
 
+        // Renderizar a lista principal (com explosão de itens)
         function render() {
             const c = document.getElementById('corpoTabela');
-            c.innerHTML = dados.transacoes.map((t, i) => `
-                <div class="border-b pb-2 cursor-pointer" onclick="toggle(${i})">
-                    <div class="flex justify-between font-bold">
-                        <span>${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''} ${t.desc}</span>
-                        <span class="${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString()}</span>
-                    </div>
-                    <div class="text-xs text-gray-400">${t.data} - ${t.categoria}</div>
-                    ${t.aberto && t.subitens ? t.subitens.map(s => `
-                        <div class="ml-6 text-sm italic text-gray-500 flex justify-between border-l pl-2 mt-1">
-                            <span>${s.desc} (${s.categoria})</span>
-                            <span>R$ ${s.valor}</span>
+            if (dados.transacoes.length === 0) return;
+
+            c.innerHTML = dados.transacoes.map((t, i) => {
+                const temSubitens = t.subitens && t.subitens.length > 0;
+                return `
+                    <div class="border border-slate-200 rounded-xl p-4 transition bg-white shadow-sm hover:shadow-md cursor-pointer" onclick="toggle(${i})">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                                    ${temSubitens ? (t.aberto ? '<span>▼</span>' : '<span>▶</span>') : ''}
+                                    ${t.desc}
+                                </h3>
+                                <div class="flex gap-2 mt-1">
+                                    <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase">${t.categoria}</span>
+                                    <span class="text-[10px] text-slate-400 font-semibold">${t.data}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="font-mono font-bold text-lg ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
+                                    R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                </span>
+                            </div>
                         </div>
-                    `).join('') : ''}
-                </div>
-            `).join('');
+                        
+                        ${t.aberto && temSubitens ? `
+                            <div class="mt-4 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                                ${t.subitens.map(s => `
+                                    <div class="flex justify-between text-sm items-center">
+                                        <div class="flex flex-col">
+                                            <span class="text-slate-600 font-medium">${s.desc}</span>
+                                            <span class="text-[9px] text-slate-400 italic">${s.categoria}</span>
+                                        </div>
+                                        <span class="font-mono font-semibold text-slate-500">R$ ${s.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
         }
 
-        function toggle(i) { if(dados.transacoes[i].subitens) { dados.transacoes[i].aberto = !dados.transacoes[i].aberto; render(); } }
-        
+        function toggle(i) {
+            if(dados.transacoes[i].subitens) {
+                dados.transacoes[i].aberto = !dados.transacoes[i].aberto;
+                render();
+            }
+        }
+
+        // Categorias
         function renderCat() {
             document.getElementById('listaCat').innerHTML = dados.categorias.map(cat => `
-                <li class="py-2 flex justify-between">${cat} <button onclick="delCat('${cat}')" class="text-red-500">x</button></li>
+                <li class="p-3 flex justify-between items-center bg-white">
+                    <span class="font-medium text-slate-700">${cat}</span> 
+                    <button onclick="delCat('${cat}')" class="text-red-400 hover:text-red-600 text-xs font-bold uppercase p-1">Excluir</button>
+                </li>
             `).join('');
         }
 
-        function addCat() { const v = document.getElementById('novaCat').value; if(v){ dados.categorias.push(v); salvar(); renderCat(); } }
-        function delCat(cat) { dados.categorias = dados.categorias.filter(c => c !== cat); salvar(); renderCat(); }
+        function addCat() {
+            const v = document.getElementById('novaCat').value;
+            if(v) {
+                dados.categorias.push(v);
+                document.getElementById('novaCat').value = "";
+                salvar();
+                renderCat();
+            }
+        }
 
-        // Tentar carregar da nuvem ao abrir
-        if(BL_URL) fetch(BL_URL).then(r => r.json()).then(d => { dados = d; render(); });
+        function delCat(cat) {
+            if(confirm(`Excluir categoria "${cat}"?`)) {
+                dados.categorias = dados.categorias.filter(c => c !== cat);
+                salvar();
+                renderCat();
+            }
+        }
+
+        // Auto-carregamento ao abrir
+        window.onload = () => {
+            if(BL_URL && !TOKEN.includes("COLE_AQUI")) {
+                document.getElementById('status').innerText = "Buscando dados na nuvem...";
+                fetch(BL_URL + '?t=' + Date.now())
+                    .then(r => r.json())
+                    .then(d => {
+                        dados = d;
+                        document.getElementById('status').innerText = "Conectado";
+                        render();
+                    })
+                    .catch(() => {
+                        document.getElementById('status').innerText = "Modo Offline";
+                    });
+            }
+        };
     </script>
 </body>
 </html>
