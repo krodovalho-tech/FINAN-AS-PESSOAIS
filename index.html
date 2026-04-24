@@ -6,175 +6,98 @@
     <title>Controle Financeiro Automático</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 p-4 font-sans">
+<body class="bg-slate-100 p-4">
     <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
         <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
-            <div>
-                <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
-                <p id="status" class="text-blue-200 text-xs italic">Pronto para iniciar</p>
-            </div>
+            <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
             <div class="flex gap-2">
-                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1 rounded hover:bg-blue-800">Início</button>
-                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1 rounded hover:bg-blue-800">Categorias</button>
-                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1 rounded hover:bg-green-600">Importar JSON</button>
+                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1 rounded">Início</button>
+                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1 rounded">Categorias</button>
+                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1 rounded">Importar JSON</button>
                 <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
             </div>
         </header>
 
+        <div id="status" class="bg-yellow-100 text-yellow-800 text-center text-xs p-1">Pronto para iniciar</div>
+
         <main id="conteudo-lancamentos" class="p-6">
-            <div id="corpoTabela" class="space-y-4">
-                <p class="text-gray-400 text-center">Clique em Importar JSON para carregar os dados iniciais.</p>
-            </div>
+            <div id="corpoTabela" class="space-y-4"></div>
         </main>
 
         <main id="conteudo-categorias" class="p-6 hidden">
-            <h2 class="font-bold mb-4">Gerenciar Categorias</h2>
             <div class="flex gap-2 mb-4">
                 <input type="text" id="novaCat" class="border p-2 flex-1 rounded" placeholder="Nova Categoria">
-                <button onclick="addCat()" class="bg-blue-600 text-white px-4 rounded">Adicionar</button>
+                <button onclick="addCat()" class="bg-blue-600 text-white px-4 rounded">Add</button>
             </div>
-            <ul id="listaCat" class="divide-y border-t"></ul>
+            <ul id="listaCat" class="divide-y"></ul>
         </main>
     </div>
 
     <script>
-        // --- CONFIGURAÇÃO CRÍTICA ---
-        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI"; 
-        // ----------------------------
-
+        const TOKEN = "COLE_AQUI_SEU_TOKEN_DA_VERCEL";
         let BL_URL = localStorage.getItem('url_ativa') || "";
         let dados = { categorias: [], transacoes: [] };
 
-        // Troca de abas
         function aba(n) {
             document.getElementById('conteudo-lancamentos').classList.toggle('hidden', n !== 'lancamentos');
             document.getElementById('conteudo-categorias').classList.toggle('hidden', n !== 'categorias');
-            if(n === 'categorias') renderCat();
+            if(n==='categorias') renderCat();
         }
 
-        // Salva os dados no Vercel Blob
         async function salvar() {
-            const statusEl = document.getElementById('status');
-            statusEl.innerText = "Sincronizando com a nuvem...";
-            
-            try {
-                const targetUrl = BL_URL || `https://blob.vercel-storage.com/dados_financeiros.json`;
-                const res = await fetch(targetUrl, {
-                    method: 'PUT',
-                    body: JSON.stringify(dados),
-                    headers: { 
-                        'Authorization': `Bearer ${TOKEN}`, 
-                        'x-cp-content-type': 'application/json' 
-                    }
-                });
-
-                const result = await res.json();
-                
-                if (!BL_URL) {
-                    BL_URL = result.url;
-                    localStorage.setItem('url_ativa', BL_URL);
-                }
-                
-                statusEl.innerText = "Sincronizado!";
-                render();
-            } catch (err) {
-                statusEl.innerText = "Erro ao salvar na nuvem.";
-                console.error(err);
-            }
+            document.getElementById('status').innerText = "Salvando na nuvem...";
+            const res = await fetch(BL_URL || `https://blob.vercel-storage.com/dados.json`, {
+                method: 'PUT',
+                body: JSON.stringify(dados),
+                headers: { 'Authorization': `Bearer ${TOKEN}`, 'x-cp-content-type': 'application/json' }
+            });
+            const d = await res.json();
+            if(!BL_URL) { BL_URL = d.url; localStorage.setItem('url_ativa', BL_URL); }
+            document.getElementById('status').innerText = "Sincronizado!";
+            render();
         }
 
-        // Importa o arquivo JSON gerado pelo Claude
         function importarDados(e) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                try {
-                    dados = JSON.parse(ev.target.result);
-                    salvar();
-                } catch (err) {
-                    alert("Erro ao ler o arquivo JSON.");
-                }
+                dados = JSON.parse(ev.target.result);
+                salvar();
             };
             reader.readAsText(e.target.files[0]);
         }
 
-        // Renderiza a lista de transações e a explosão do cartão
         function render() {
             const c = document.getElementById('corpoTabela');
-            if (dados.transacoes.length === 0) return;
-
             c.innerHTML = dados.transacoes.map((t, i) => `
-                <div class="border-b pb-3 pt-1 cursor-pointer hover:bg-slate-50" onclick="toggle(${i})">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">
-                            ${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''} ${t.desc}
-                        </span>
-                        <span class="font-mono font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
-                            R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </span>
+                <div class="border-b pb-2 cursor-pointer" onclick="toggle(${i})">
+                    <div class="flex justify-between font-bold">
+                        <span>${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''} ${t.desc}</span>
+                        <span class="${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString()}</span>
                     </div>
-                    <div class="flex justify-between text-[10px] text-gray-400 uppercase tracking-wider">
-                        <span>${t.data}</span>
-                        <span>${t.categoria}</span>
-                    </div>
-                    ${t.aberto && t.subitens ? `
-                        <div class="mt-2 ml-4 border-l-2 border-blue-100 pl-3 space-y-1">
-                            ${t.subitens.map(s => `
-                                <div class="flex justify-between text-sm italic text-slate-500">
-                                    <span>${s.desc} <small class="not-italic text-[9px] bg-slate-100 px-1 rounded">${s.categoria}</small></span>
-                                    <span>R$ ${s.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                </div>
-                            `).join('')}
+                    <div class="text-xs text-gray-400">${t.data} - ${t.categoria}</div>
+                    ${t.aberto && t.subitens ? t.subitens.map(s => `
+                        <div class="ml-6 text-sm italic text-gray-500 flex justify-between border-l pl-2 mt-1">
+                            <span>${s.desc} (${s.categoria})</span>
+                            <span>R$ ${s.valor}</span>
                         </div>
-                    ` : ''}
+                    `).join('') : ''}
                 </div>
             `).join('');
         }
 
-        function toggle(i) {
-            if(dados.transacoes[i].subitens) {
-                dados.transacoes[i].aberto = !dados.transacoes[i].aberto;
-                render();
-            }
-        }
-
+        function toggle(i) { if(dados.transacoes[i].subitens) { dados.transacoes[i].aberto = !dados.transacoes[i].aberto; render(); } }
+        
         function renderCat() {
             document.getElementById('listaCat').innerHTML = dados.categorias.map(cat => `
-                <li class="py-3 flex justify-between items-center text-slate-600">
-                    ${cat} 
-                    <button onclick="delCat('${cat}')" class="text-red-400 hover:text-red-600 text-xs font-bold uppercase">Excluir</button>
-                </li>
+                <li class="py-2 flex justify-between">${cat} <button onclick="delCat('${cat}')" class="text-red-500">x</button></li>
             `).join('');
         }
 
-        function addCat() {
-            const v = document.getElementById('novaCat').value;
-            if(v) {
-                dados.categorias.push(v);
-                document.getElementById('novaCat').value = "";
-                salvar();
-                renderCat();
-            }
-        }
+        function addCat() { const v = document.getElementById('novaCat').value; if(v){ dados.categorias.push(v); salvar(); renderCat(); } }
+        function delCat(cat) { dados.categorias = dados.categorias.filter(c => c !== cat); salvar(); renderCat(); }
 
-        function delCat(cat) {
-            dados.categorias = dados.categorias.filter(c => c !== cat);
-            salvar();
-            renderCat();
-        }
-
-        // Tentar carregar dados da nuvem automaticamente ao abrir o app
-        if(BL_URL && TOKEN !== "COLE_AQUI_SEU_TOKEN_DA_VERCEL") {
-            fetch(BL_URL + '?t=' + Date.now())
-                .then(r => r.json())
-                .then(d => {
-                    dados = d;
-                    document.getElementById('status').innerText = "Nuvem: Conectado";
-                    render();
-                })
-                .catch(() => {
-                    document.getElementById('status').innerText = "Nuvem: Offline (Use Importar)";
-                });
-        }
+        // Tentar carregar da nuvem ao abrir
+        if(BL_URL) fetch(BL_URL).then(r => r.json()).then(d => { dados = d; render(); });
     </script>
 </body>
 </html>
