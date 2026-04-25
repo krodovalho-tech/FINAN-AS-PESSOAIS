@@ -5,98 +5,37 @@
     <title>Meu Financeiro Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 p-4">
+<body class="bg-slate-100 p-4 font-sans">
     <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
         <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
-            <div><h1 class="text-xl font-bold">Meu Financeiro Cloud</h1><p id="status" class="text-blue-100 text-xs italic font-bold">Iniciando...</p></div>
-            <button onclick="document.getElementById('importFile').click()" class="bg-green-500 px-4 py-2 rounded-lg font-bold text-sm">Importar JSON</button>
-            <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
+            <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
+            <p id="status" class="text-blue-100 text-xs italic font-bold">Carregando...</p>
         </header>
-        <main id="corpoTabela" class="p-6 space-y-3"></main>
+        <main id="corpo" class="p-6 space-y-3"></main>
     </div>
 
     <script>
-        // CERTIFIQUE-SE DE QUE ESTE TOKEN É O NOVO QUE VOCÊ GEROU
-        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI";
-        
-        // Vamos usar a URL direta da API para evitar o erro de CORS da imagem
-        const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
-        
-        let dados = { transacoes: [] };
+        // COLE AQUI O LINK QUE VOCÊ COPIOU DO VERCEL STORAGE
+        const urlFinal = "COLE_AQUI_A_URL_DO_ARQUIVO";
 
-        async function salvar() {
-            const statusEl = document.getElementById('status');
-            statusEl.innerText = "Sincronizando...";
+        async function carregar() {
             try {
-                const res = await fetch(targetUrl, {
-                    method: 'PUT',
-                    body: JSON.stringify(dados),
-                    headers: { 
-                        'Authorization': `Bearer ${TOKEN}`,
-                        'x-api-version': '1',
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (res.ok) {
-                    statusEl.innerText = "Sincronizado com Sucesso!";
-                    render();
-                } else {
-                    const erroTxt = await res.text();
-                    statusEl.innerText = "Erro na Vercel: " + res.status;
-                    console.log("Detalhe do erro:", erroTxt);
-                }
-            } catch (err) {
-                statusEl.innerText = "Erro de Conexão (CORS)";
-                console.error(err);
-            }
-        }
-
-        function importarDados(e) {
-            const reader = new FileReader();
-            reader.onload = async (ev) => { 
-                try {
-                    dados = JSON.parse(ev.target.result); 
-                    await salvar(); 
-                } catch (e) { alert("Arquivo inválido!"); }
-            };
-            reader.readAsText(e.target.files[0]);
-        }
-
-        function render() {
-            const c = document.getElementById('corpoTabela');
-            if (!dados.transacoes || dados.transacoes.length === 0) {
-                c.innerHTML = '<p class="text-center text-slate-400 py-10 italic">Nenhum dado na nuvem. Clique em Importar.</p>';
-                return;
-            }
-            c.innerHTML = dados.transacoes.map(t => `
-                <div class="border p-4 rounded-xl flex justify-between items-center bg-slate-50 shadow-sm">
-                    <div><p class="font-bold text-slate-700">${t.desc}</p><p class="text-[10px] text-slate-400 font-bold uppercase">${t.categoria || 'Geral'}</p></div>
-                    <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                </div>
-            `).join('');
-        }
-
-        window.onload = async () => {
-            try {
-                // O cache: 'no-store' força o navegador a buscar o dado novo, não o velho
-                const r = await fetch(targetUrl, { 
-                    headers: { 'Authorization': `Bearer ${TOKEN}` },
-                    cache: 'no-store'
-                });
+                const r = await fetch(urlFinal + '?t=' + Date.now());
                 if (r.ok) {
-                    dados = await r.json();
+                    const dados = await r.json();
                     document.getElementById('status').innerText = "Conectado";
-                    render();
-                } else {
-                    document.getElementById('status').innerText = "Pronto para importar";
-                    render();
+                    document.getElementById('corpo').innerHTML = dados.transacoes.map(t => `
+                        <div class="border p-4 rounded-xl flex justify-between bg-slate-50 shadow-sm">
+                            <div><p class="font-bold">${t.desc}</p><p class="text-[10px] text-slate-400 font-bold">${t.data}</p></div>
+                            <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                        </div>
+                    `).join('');
                 }
             } catch (e) {
-                document.getElementById('status').innerText = "Pronto para importar";
-                render();
+                document.getElementById('status').innerText = "Erro ao carregar dados";
             }
-        };
+        }
+        window.onload = carregar;
     </script>
 </body>
 </html>
