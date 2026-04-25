@@ -1,153 +1,72 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu Financeiro Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 p-4 font-sans text-slate-800">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px]">
-        <header class="bg-blue-600 p-6 text-white flex justify-between items-center shadow-lg">
-            <div>
-                <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
-                <p id="status" class="text-blue-100 text-xs italic font-semibold">Iniciando...</p>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="aba('lancamentos')" class="text-sm bg-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-800 transition">Início</button>
-                <button onclick="aba('categorias')" class="text-sm bg-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-800 transition">Categorias</button>
-                <button onclick="document.getElementById('importFile').click()" class="text-sm bg-green-500 px-3 py-1.5 rounded-lg hover:bg-green-600 transition font-bold text-white">Importar JSON</button>
-                <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
-            </div>
+<body class="bg-slate-100 p-4 font-sans">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
+        <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
+            <div><h1 class="text-xl font-bold">Meu Financeiro Cloud</h1><p id="status" class="text-blue-100 text-xs italic font-bold">Iniciando...</p></div>
+            <button onclick="document.getElementById('importFile').click()" class="bg-green-500 px-4 py-2 rounded-lg font-bold text-sm">Importar JSON</button>
+            <input type="file" id="importFile" class="hidden" onchange="importarDados(event)">
         </header>
-
-        <main id="conteudo-lancamentos" class="p-6">
-            <div id="corpoTabela" class="space-y-4">
-                <div class="text-center py-10">
-                    <p class="text-slate-400 font-medium">Pronto! Clique em "Importar JSON" para subir o arquivo "meus_dados.json".</p>
-                </div>
-            </div>
-        </main>
-
-        <main id="conteudo-categorias" class="p-6 hidden">
-            <h2 class="text-lg font-bold mb-4 text-blue-600">Categorias</h2>
-            <ul id="listaCat" class="divide-y border rounded-lg bg-slate-50"></ul>
-        </main>
+        <main id="corpoTabela" class="p-6 space-y-3"></main>
     </div>
 
     <script>
-       const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI";
-
-// Vamos usar o endereço de API direta, que pula o erro de CORS
-const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
-
-        let dados = { categorias: ["Moradia", "Alimentação", "Lazer", "Veículo", "Saúde"], transacoes: [] };
-
-        function aba(n) {
-            document.getElementById('conteudo-lancamentos').classList.toggle('hidden', n !== 'lancamentos');
-            document.getElementById('conteudo-categorias').classList.toggle('hidden', n !== 'categorias');
-            if(n === 'categorias') renderCat();
-        }
+        // Use o seu TOKEN atual ou o novo que você criar
+        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI";
+        
+        // URL UNIVERSAL (Não mude isso, a Vercel entende esse endereço)
+        const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
+        
+        let dados = { transacoes: [] };
 
         async function salvar() {
-            const statusEl = document.getElementById('status');
-            statusEl.innerText = "Sincronizando...";
+            document.getElementById('status').innerText = "Sincronizando...";
             try {
                 const res = await fetch(targetUrl, {
                     method: 'PUT',
                     body: JSON.stringify(dados),
-                    headers: { 
-                        'Authorization': `Bearer ${TOKEN}`,
-                        'x-api-version': '1',
-                        'Content-Type': 'application/json' 
-                    }
+                    headers: { 'Authorization': `Bearer ${TOKEN}`, 'x-api-version': '1', 'Content-Type': 'application/json' }
                 });
-                if (res.ok) {
-                    statusEl.innerText = "Conectado e Sincronizado!";
-                    render();
-                } else {
-                    statusEl.innerText = "Erro ao gravar na nuvem.";
-                }
-            } catch (err) {
-                statusEl.innerText = "Erro de conexão.";
-                console.error(err);
-            }
+                if (res.ok) { document.getElementById('status').innerText = "Sincronizado!"; render(); }
+            } catch (err) { document.getElementById('status').innerText = "Erro ao Salvar"; }
         }
 
         function importarDados(e) {
-            const file = e.target.files[0];
-            if (!file) return;
             const reader = new FileReader();
-            reader.onload = async (ev) => {
+            reader.onload = async (ev) => { 
                 try {
-                    dados = JSON.parse(ev.target.result);
-                    await salvar();
-                } catch (err) {
-                    alert("Arquivo JSON inválido.");
-                }
+                    dados = JSON.parse(ev.target.result); 
+                    await salvar(); 
+                } catch (e) { alert("Erro no arquivo!"); }
             };
-            reader.readAsText(file);
+            reader.readAsText(e.target.files[0]);
         }
 
         function render() {
             const c = document.getElementById('corpoTabela');
-            if (dados.transacoes.length === 0) {
-                c.innerHTML = '<div class="text-center py-10 text-slate-400 font-medium italic underline">Nenhum dado encontrado. Importe seu arquivo JSON.</div>';
+            if (!dados.transacoes || dados.transacoes.length === 0) {
+                c.innerHTML = '<p class="text-center text-slate-400">Clique em Importar para começar.</p>';
                 return;
             }
-            c.innerHTML = dados.transacoes.map((t, i) => `
-                <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md cursor-pointer" onclick="toggle(${i})">
-                    <div class="flex justify-between items-start">
-                        <div class="flex-1">
-                            <h3 class="font-bold text-slate-800">${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''}${t.desc}</h3>
-                            <div class="flex gap-2 mt-1">
-                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase">${t.categoria}</span>
-                                <span class="text-[10px] text-slate-400 font-semibold">${t.data}</span>
-                            </div>
-                        </div>
-                        <div class="text-right font-mono font-bold text-lg ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
-                            R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                    </div>
-                    ${t.aberto && t.subitens ? `<div class="mt-4 pt-3 border-t border-dashed space-y-2">
-                        ${t.subitens.map(s => `<div class="flex justify-between text-sm italic text-slate-500 font-medium">
-                            <span>${s.desc}</span><span>R$ ${s.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                        </div>`).join('')}
-                    </div>` : ''}
+            c.innerHTML = dados.transacoes.map(t => `
+                <div class="border p-4 rounded-xl flex justify-between items-center bg-slate-50">
+                    <div><p class="font-bold">${t.desc}</p><p class="text-xs text-slate-400">${t.data}</p></div>
+                    <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR')}</div>
                 </div>
-            `).join('');
-        }
-
-        function toggle(i) {
-            if(dados.transacoes[i].subitens) {
-                dados.transacoes[i].aberto = !dados.transacoes[i].aberto;
-                render();
-            }
-        }
-
-        function renderCat() {
-            document.getElementById('listaCat').innerHTML = dados.categorias.map(cat => `
-                <li class="p-3 flex justify-between items-center bg-white"><span>${cat}</span></li>
             `).join('');
         }
 
         window.onload = async () => {
             try {
-                const r = await fetch(targetUrl + '?t=' + Date.now(), { 
-                    headers: { 'Authorization': `Bearer ${TOKEN}` } 
-                });
-                if (r.ok) {
-                    dados = await r.json();
-                    document.getElementById('status').innerText = "Conectado";
-                    render();
-                } else {
-                    document.getElementById('status').innerText = "Pronto para iniciar";
-                    render();
-                }
-            } catch (err) {
-                document.getElementById('status').innerText = "Pronto para iniciar";
-                render();
-            }
+                const r = await fetch(targetUrl, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                if (r.ok) { dados = await r.json(); document.getElementById('status').innerText = "Conectado"; render(); }
+                else { document.getElementById('status').innerText = "Pronto para importar"; render(); }
+            } catch (e) { document.getElementById('status').innerText = "Aguardando Importação"; render(); }
         };
     </script>
 </body>
