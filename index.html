@@ -1,41 +1,19 @@
 <!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meu Financeiro Cloud</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-100 p-4 font-sans">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
-        <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
-            <h1 class="text-xl font-bold">Meu Financeiro Cloud</h1>
-            <p id="status" class="text-blue-100 text-xs italic font-bold">Carregando...</p>
-        </header>
-        <main id="corpo" class="p-6 space-y-3"></main>
-    </div>
-
-    <script>
-        // COLE AQUI O LINK QUE VOCÊ COPIOU DO VERCEL STORAGE
-        const urlFinal = "COLE_AQUI_A_URL_DO_ARQUIVO";
-
-        async function carregar() {
-            try {
-                const r = await fetch(urlFinal + '?t=' + Date.now());
-                if (r.ok) {
-                    const dados = await r.json();
-                    document.getElementById('status').innerText = "Conectado";
-                    document.getElementById('corpo').innerHTML = dados.transacoes.map(t => `
-                        <div class="border p-4 rounded-xl flex justify-between bg-slate-50 shadow-sm">
-                            <div><p class="font-bold">${t.desc}</p><p class="text-[10px] text-slate-400 font-bold">${t.data}</p></div>
-                            <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) {
-                document.getElementById('status').innerText = "Erro ao carregar dados";
-            }
-        }
-        window.onload = carregar;
-    </script>
-</body>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f0c0a" />
+    <title>Controle Financeiro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #0f0c0a; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
