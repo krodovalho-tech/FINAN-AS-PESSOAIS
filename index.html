@@ -53,8 +53,34 @@
         }
 
         async function salvar() {
-            const statusEl = document.getElementById('status');
-            statusEl.innerText = "Sincronizando...";
+    const statusEl = document.getElementById('status');
+    statusEl.innerText = "Sincronizando...";
+    
+    try {
+        // Mudamos para o endereço de upload direto da API do Blob
+        const res = await fetch(`https://blob.vercel-storage.com/meu_financeiro.json`, {
+            method: 'PUT',
+            body: JSON.stringify(dados),
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'x-api-version': '1',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (res.ok) {
+            statusEl.innerText = "Sincronizado com Sucesso!";
+            render();
+        } else {
+            const erroTxt = await res.text();
+            statusEl.innerText = "Erro: Sem permissão no Storage.";
+            console.error("Detalhe do erro:", erroTxt);
+        }
+    } catch (err) {
+        statusEl.innerText = "Erro de conexão com a Vercel.";
+        console.error(err);
+    }
+}
             
             try {
                 const res = await fetch(targetUrl, {
