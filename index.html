@@ -5,7 +5,7 @@
     <title>Meu Financeiro Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 p-4 font-sans">
+<body class="bg-slate-100 p-4">
     <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
         <header class="bg-blue-600 p-6 text-white flex justify-between items-center">
             <div><h1 class="text-xl font-bold">Meu Financeiro Cloud</h1><p id="status" class="text-blue-100 text-xs italic font-bold">Iniciando...</p></div>
@@ -16,24 +16,40 @@
     </div>
 
     <script>
-        // Use o seu TOKEN atual ou o novo que você criar
-        const TOKEN = "vercel_blob_rw_w89TqPuaWbbnvH7V_RmjweH1fhIaSAg7gj9JjrZyyUUa7cY";
+        // CERTIFIQUE-SE DE QUE ESTE TOKEN É O NOVO QUE VOCÊ GEROU
+        const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI";
         
-        // URL UNIVERSAL (Não mude isso, a Vercel entende esse endereço)
+        // Vamos usar a URL direta da API para evitar o erro de CORS da imagem
         const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
         
         let dados = { transacoes: [] };
 
         async function salvar() {
-            document.getElementById('status').innerText = "Sincronizando...";
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "Sincronizando...";
             try {
                 const res = await fetch(targetUrl, {
                     method: 'PUT',
                     body: JSON.stringify(dados),
-                    headers: { 'Authorization': `Bearer ${TOKEN}`, 'x-api-version': '1', 'Content-Type': 'application/json' }
+                    headers: { 
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'x-api-version': '1',
+                        'Content-Type': 'application/json'
+                    }
                 });
-                if (res.ok) { document.getElementById('status').innerText = "Sincronizado!"; render(); }
-            } catch (err) { document.getElementById('status').innerText = "Erro ao Salvar"; }
+                
+                if (res.ok) {
+                    statusEl.innerText = "Sincronizado com Sucesso!";
+                    render();
+                } else {
+                    const erroTxt = await res.text();
+                    statusEl.innerText = "Erro na Vercel: " + res.status;
+                    console.log("Detalhe do erro:", erroTxt);
+                }
+            } catch (err) {
+                statusEl.innerText = "Erro de Conexão (CORS)";
+                console.error(err);
+            }
         }
 
         function importarDados(e) {
@@ -42,7 +58,7 @@
                 try {
                     dados = JSON.parse(ev.target.result); 
                     await salvar(); 
-                } catch (e) { alert("Erro no arquivo!"); }
+                } catch (e) { alert("Arquivo inválido!"); }
             };
             reader.readAsText(e.target.files[0]);
         }
@@ -50,23 +66,36 @@
         function render() {
             const c = document.getElementById('corpoTabela');
             if (!dados.transacoes || dados.transacoes.length === 0) {
-                c.innerHTML = '<p class="text-center text-slate-400">Clique em Importar para começar.</p>';
+                c.innerHTML = '<p class="text-center text-slate-400 py-10 italic">Nenhum dado na nuvem. Clique em Importar.</p>';
                 return;
             }
             c.innerHTML = dados.transacoes.map(t => `
-                <div class="border p-4 rounded-xl flex justify-between items-center bg-slate-50">
-                    <div><p class="font-bold">${t.desc}</p><p class="text-xs text-slate-400">${t.data}</p></div>
-                    <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR')}</div>
+                <div class="border p-4 rounded-xl flex justify-between items-center bg-slate-50 shadow-sm">
+                    <div><p class="font-bold text-slate-700">${t.desc}</p><p class="text-[10px] text-slate-400 font-bold uppercase">${t.categoria || 'Geral'}</p></div>
+                    <div class="font-bold ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
                 </div>
             `).join('');
         }
 
         window.onload = async () => {
             try {
-                const r = await fetch(targetUrl, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-                if (r.ok) { dados = await r.json(); document.getElementById('status').innerText = "Conectado"; render(); }
-                else { document.getElementById('status').innerText = "Pronto para importar"; render(); }
-            } catch (e) { document.getElementById('status').innerText = "Aguardando Importação"; render(); }
+                // O cache: 'no-store' força o navegador a buscar o dado novo, não o velho
+                const r = await fetch(targetUrl, { 
+                    headers: { 'Authorization': `Bearer ${TOKEN}` },
+                    cache: 'no-store'
+                });
+                if (r.ok) {
+                    dados = await r.json();
+                    document.getElementById('status').innerText = "Conectado";
+                    render();
+                } else {
+                    document.getElementById('status').innerText = "Pronto para importar";
+                    render();
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = "Pronto para importar";
+                render();
+            }
         };
     </script>
 </body>
