@@ -42,7 +42,7 @@
     <script>
         // CONFIGURAÇÃO AUTOMATIZADA
         const TOKEN = "vercel_blob_rw_LSTMZDJfvY9YzSu8_yaCRUQbcCBJKGW4MMuLYCuKhUJ2knI"; 
-       const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
+        const targetUrl = "https://blob.vercel-storage.com/meus_dados.json";
 
         let dados = { categorias: ["Moradia", "Alimentação", "Lazer", "Veículo", "Saúde"], transacoes: [] };
 
@@ -53,63 +53,35 @@
         }
 
         async function salvar() {
-    const statusEl = document.getElementById('status');
-    statusEl.innerText = "Sincronizando...";
-    
-    try {
-        // Mudamos para o endereço de upload direto da API do Blob
-        const res = await fetch(`https://blob.vercel-storage.com/meu_financeiro.json`, {
-            method: 'PUT',
-            body: JSON.stringify(dados),
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'x-api-version': '1',
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (res.ok) {
-            statusEl.innerText = "Sincronizado com Sucesso!";
-            render();
-        } else {
-            const erroTxt = await res.text();
-            statusEl.innerText = "Erro: Sem permissão no Storage.";
-            console.error("Detalhe do erro:", erroTxt);
-        }
-    } catch (err) {
-        statusEl.innerText = "Erro de conexão com a Vercel.";
-        console.error(err);
-    }
-}
-            
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "Sincronizando...";
             try {
                 const res = await fetch(targetUrl, {
                     method: 'PUT',
                     body: JSON.stringify(dados),
                     headers: { 
-                        'Authorization': `Bearer ${TOKEN}`, 
-                        'x-cp-content-type': 'application/json' 
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'x-api-version': '1',
+                        'Content-Type': 'application/json' 
                     }
                 });
-
                 if (res.ok) {
-                    statusEl.innerText = "Sincronizado com Sucesso!";
+                    statusEl.innerText = "Sincronizado!";
                     render();
                 } else {
-                    statusEl.innerText = "Erro na permissão da nuvem.";
+                    statusEl.innerText = "Erro ao salvar.";
                 }
             } catch (err) {
                 statusEl.innerText = "Erro de conexão.";
-                console.error(err);
             }
         }
 
         function importarDados(e) {
             const reader = new FileReader();
-            reader.onload = (ev) => {
+            reader.onload = async (ev) => {
                 try {
                     dados = JSON.parse(ev.target.result);
-                    salvar();
+                    await salvar();
                 } catch (err) {
                     alert("Arquivo inválido.");
                 }
@@ -124,7 +96,7 @@
                 <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md cursor-pointer" onclick="toggle(${i})">
                     <div class="flex justify-between items-start">
                         <div class="flex-1">
-                            <h3 class="font-bold text-slate-800">${t.subitens && t.subitens.length > 0 ? (t.aberto ? '▼ ' : '▶ ') : ''}${t.desc}</h3>
+                            <h3 class="font-bold text-slate-800">${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''}${t.desc}</h3>
                             <div class="flex gap-2 mt-1">
                                 <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase">${t.categoria}</span>
                                 <span class="text-[10px] text-slate-400 font-semibold">${t.data}</span>
@@ -156,16 +128,22 @@
             `).join('');
         }
 
-        // Tenta carregar ao abrir
-        window.onload = () => {
-            fetch(targetUrl + '?t=' + Date.now(), { headers: { 'Authorization': `Bearer ${TOKEN}` } })
-                .then(r => r.json())
-                .then(d => {
-                    dados = d;
+        // CORREÇÃO DO ERRO DE SYNTAYX: Função asíncrona correta
+        window.onload = async () => {
+            try {
+                const r = await fetch(targetUrl + '?t=' + Date.now(), { 
+                    headers: { 'Authorization': `Bearer ${TOKEN}` } 
+                });
+                if (r.ok) {
+                    dados = await r.json();
                     document.getElementById('status').innerText = "Conectado";
                     render();
-                })
-                .catch(() => { document.getElementById('status').innerText = "Pronto para iniciar"; });
+                } else {
+                    document.getElementById('status').innerText = "Pronto (Sem dados na nuvem)";
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = "Pronto para iniciar";
+            }
         };
     </script>
 </body>
