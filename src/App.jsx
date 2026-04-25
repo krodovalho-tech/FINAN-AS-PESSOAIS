@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlusCircle, Trash2, TrendingUp, TrendingDown, DollarSign, BarChart3,
   X, Download, Upload, Pencil, CheckCircle, AlertTriangle, ArrowUpDown,
