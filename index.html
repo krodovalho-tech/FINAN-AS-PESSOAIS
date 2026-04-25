@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financeiro Sincronizado</title>
+    <title>Meu Financeiro Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 p-4 font-sans text-slate-800">
@@ -24,17 +24,13 @@
         <main id="conteudo-lancamentos" class="p-6">
             <div id="corpoTabela" class="space-y-4">
                 <div class="text-center py-10">
-                    <p class="text-slate-400">Pronto! Clique em "Importar JSON" para subir o arquivo "meus_dados.json".</p>
+                    <p class="text-slate-400 font-medium">Pronto! Clique em "Importar JSON" para subir o arquivo "meus_dados.json".</p>
                 </div>
             </div>
         </main>
 
         <main id="conteudo-categorias" class="p-6 hidden">
             <h2 class="text-lg font-bold mb-4 text-blue-600">Categorias</h2>
-            <div class="flex gap-2 mb-6">
-                <input type="text" id="novaCat" class="border p-2 flex-1 rounded-lg outline-none" placeholder="Nova Categoria">
-                <button onclick="addCat()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add</button>
-            </div>
             <ul id="listaCat" class="divide-y border rounded-lg bg-slate-50"></ul>
         </main>
     </div>
@@ -44,6 +40,12 @@
         const targetUrl = "https://lstmzdjfvy9yzsu8.private.blob.vercel-storage.com/meus_dados.json";
 
         let dados = { categorias: ["Moradia", "Alimentação", "Lazer", "Veículo", "Saúde"], transacoes: [] };
+
+        function aba(n) {
+            document.getElementById('conteudo-lancamentos').classList.toggle('hidden', n !== 'lancamentos');
+            document.getElementById('conteudo-categorias').classList.toggle('hidden', n !== 'categorias');
+            if(n === 'categorias') renderCat();
+        }
 
         async function salvar() {
             const statusEl = document.getElementById('status');
@@ -56,22 +58,95 @@
                         'Authorization': `Bearer ${TOKEN}`,
                         'x-api-version': '1',
                         'Content-Type': 'application/json' 
-                    },
-                    mode: 'cors' // Força o modo de compartilhamento
+                    }
                 });
                 if (res.ok) {
                     statusEl.innerText = "Conectado e Sincronizado!";
                     render();
                 } else {
-                    statusEl.innerText = "Erro na Nuvem.";
+                    statusEl.innerText = "Erro ao gravar na nuvem.";
                 }
             } catch (err) {
-                statusEl.innerText = "Erro de Conexão.";
+                statusEl.innerText = "Erro de conexão.";
+                console.error(err);
             }
         }
 
-        // Restante das funções (render, toggle, etc.) continuam iguais
-        // ... (mantenha o window.onload que te passei antes)
+        function importarDados(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    dados = JSON.parse(ev.target.result);
+                    await salvar();
+                } catch (err) {
+                    alert("Arquivo JSON inválido.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function render() {
+            const c = document.getElementById('corpoTabela');
+            if (dados.transacoes.length === 0) {
+                c.innerHTML = '<div class="text-center py-10 text-slate-400 font-medium italic underline">Nenhum dado encontrado. Importe seu arquivo JSON.</div>';
+                return;
+            }
+            c.innerHTML = dados.transacoes.map((t, i) => `
+                <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md cursor-pointer" onclick="toggle(${i})">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="font-bold text-slate-800">${t.subitens ? (t.aberto ? '▼ ' : '▶ ') : ''}${t.desc}</h3>
+                            <div class="flex gap-2 mt-1">
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold uppercase">${t.categoria}</span>
+                                <span class="text-[10px] text-slate-400 font-semibold">${t.data}</span>
+                            </div>
+                        </div>
+                        <div class="text-right font-mono font-bold text-lg ${t.valor < 0 ? 'text-red-500' : 'text-green-600'}">
+                            R$ ${Math.abs(t.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                    </div>
+                    ${t.aberto && t.subitens ? `<div class="mt-4 pt-3 border-t border-dashed space-y-2">
+                        ${t.subitens.map(s => `<div class="flex justify-between text-sm italic text-slate-500 font-medium">
+                            <span>${s.desc}</span><span>R$ ${s.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        </div>`).join('')}
+                    </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function toggle(i) {
+            if(dados.transacoes[i].subitens) {
+                dados.transacoes[i].aberto = !dados.transacoes[i].aberto;
+                render();
+            }
+        }
+
+        function renderCat() {
+            document.getElementById('listaCat').innerHTML = dados.categorias.map(cat => `
+                <li class="p-3 flex justify-between items-center bg-white"><span>${cat}</span></li>
+            `).join('');
+        }
+
+        window.onload = async () => {
+            try {
+                const r = await fetch(targetUrl + '?t=' + Date.now(), { 
+                    headers: { 'Authorization': `Bearer ${TOKEN}` } 
+                });
+                if (r.ok) {
+                    dados = await r.json();
+                    document.getElementById('status').innerText = "Conectado";
+                    render();
+                } else {
+                    document.getElementById('status').innerText = "Pronto para iniciar";
+                    render();
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = "Pronto para iniciar";
+                render();
+            }
+        };
     </script>
 </body>
 </html>
