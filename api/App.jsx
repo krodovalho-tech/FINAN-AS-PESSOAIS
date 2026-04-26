@@ -14,13 +14,14 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   "Moradia","Alimentação","Transporte","Saúde","Educação",
   "Lazer","Vestuário","Investimentos","Impostos","Cartão de Crédito","Serviços","Contas","Compras","Casa","Financeiro","Saque","Transferência","Outros"
 ];
-const EXPENSE_CATEGORIES_STORED = JSON.parse(localStorage.getItem("expense_categories") || "null") || DEFAULT_EXPENSE_CATEGORIES;
-let EXPENSE_CATEGORIES = [...EXPENSE_CATEGORIES_STORED];
+// Sempre mescla defaults com o que estiver salvo no localStorage (para nunca perder categorias padrão)
+const _storedExp = JSON.parse(localStorage.getItem("expense_categories") || "null");
+let EXPENSE_CATEGORIES = _storedExp ? [...new Set([...DEFAULT_EXPENSE_CATEGORIES, ..._storedExp])] : [...DEFAULT_EXPENSE_CATEGORIES];
 const DEFAULT_INCOME_CATEGORIES = [
-  "Salário","Pró Labore","Pró-labore","Dividendos","Aluguel","Freelance","Outros"
+  "Salário","Pró Labore","Dividendos","Aluguel","Freelance","Outros"
 ];
-const INCOME_CATEGORIES_STORED = JSON.parse(localStorage.getItem("income_categories") || "null") || DEFAULT_INCOME_CATEGORIES;
-let INCOME_CATEGORIES = [...INCOME_CATEGORIES_STORED];
+const _storedInc = JSON.parse(localStorage.getItem("income_categories") || "null");
+let INCOME_CATEGORIES = _storedInc ? [...new Set([...DEFAULT_INCOME_CATEGORIES, ..._storedInc])] : [...DEFAULT_INCOME_CATEGORIES];
 let ALL_CATEGORIES = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
 const COLORS = ["#c8a97e","#7eb8c8","#c87e9a","#7ec87e","#c8c87e","#9a7ec8",
                  "#c8957e","#7ec8b8","#b8c87e","#7e9ac8","#c87e7e"];
@@ -355,8 +356,14 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
 
 // ─── CATEGORY MANAGER MODAL ─────────────────────────────────────────────────
 function CategoryModal({ show, onClose, onSave }) {
-  const [expCats, setExpCats] = useState(() => JSON.parse(localStorage.getItem("expense_categories") || "null") || DEFAULT_EXPENSE_CATEGORIES);
-  const [incCats, setIncCats] = useState(() => JSON.parse(localStorage.getItem("income_categories") || "null") || DEFAULT_INCOME_CATEGORIES);
+  const [expCats, setExpCats] = useState(() => {
+    const s = JSON.parse(localStorage.getItem("expense_categories") || "null");
+    return s ? [...new Set([...DEFAULT_EXPENSE_CATEGORIES, ...s])] : [...DEFAULT_EXPENSE_CATEGORIES];
+  });
+  const [incCats, setIncCats] = useState(() => {
+    const s = JSON.parse(localStorage.getItem("income_categories") || "null");
+    return s ? [...new Set([...DEFAULT_INCOME_CATEGORIES, ...s])] : [...DEFAULT_INCOME_CATEGORIES];
+  });
   const [newExp, setNewExp] = useState("");
   const [newInc, setNewInc] = useState("");
 
@@ -837,19 +844,18 @@ export default function App() {
                   <button key={s} onClick={()=>setSortBy(s)} style={S.btn(sortBy===s)}>{l}</button>
                 ))}
               </div>
-              <button onClick={()=>setShowCatManager(true)} title="Gerenciar categorias" style={{...S.btn(false), display:"flex", alignItems:"center", gap:"4px", fontSize:"0.75rem"}}>⚙ Categorias</button>
             </div>
 
-            {/* ── Category filter chips ── */}
+            {/* ── Category filter chips + Gerenciar categorias ── */}
             {(() => {
               const cats = [...new Set(entries.filter(e=>filterType==="all"||e.type===filterType).map(e=>e.category))].sort();
-              if (!cats.length) return null;
               return (
-                <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"0.8rem" }}>
+                <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"0.8rem", alignItems:"center" }}>
                   <button onClick={()=>setFilterCategory("all")} style={{...S.btn(filterCategory==="all"), fontSize:"0.75rem", padding:"0.3rem 0.7rem"}}>Todas</button>
                   {cats.map(c=>(
                     <button key={c} onClick={()=>setFilterCategory(c===filterCategory?"all":c)} style={{...S.btn(filterCategory===c), fontSize:"0.75rem", padding:"0.3rem 0.7rem"}}>{c}</button>
                   ))}
+                  <button onClick={()=>setShowCatManager(true)} style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:"4px", padding:"0.3rem 0.8rem", background:"#2a2018", border:"1px solid #3d342a", borderRadius:"8px", color:"#c8a97e", cursor:"pointer", fontSize:"0.75rem", fontFamily:"'Source Sans 3',sans-serif" }}>⚙ Criar/Gerenciar categorias</button>
                 </div>
               );
             })()}
@@ -909,4 +915,15 @@ export default function App() {
         <p style={{ fontSize:"0.85rem",color:"#8a7a6a",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#e8d8c0" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
         <div style={{ display:"flex",gap:"0.6rem" }}>
           <button onClick={()=>setDelConfirm(null)} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-          <button onClick={()=>handleDelete(delConfirm)} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borde
+          <button onClick={()=>handleDelete(delConfirm)} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>Excluir</button>
+        </div>
+      </Modal>
+
+      <CategoryModal show={showCatManager} onClose={()=>setShowCatManager(false)} onSave={()=>setCustomCategories({expense:[...EXPENSE_CATEGORIES],income:[...INCOME_CATEGORIES]})}/>
+
+      {/* Import preview */}
+      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} onConfirm={handleImportConfirm}
+        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v}:e))}/>
+    </div>
+  );
+}
