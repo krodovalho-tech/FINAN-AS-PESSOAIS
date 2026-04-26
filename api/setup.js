@@ -12,6 +12,7 @@ export default async function handler(req, res) {
         amount    DECIMAL(12,2)  NOT NULL,
         date      DATE           NOT NULL,
         recurring BOOLEAN        DEFAULT FALSE,
+        notes     TEXT,
         created_at TIMESTAMPTZ   DEFAULT NOW()
       )
     `;
