@@ -40,13 +40,13 @@ export default async function handler(req, res) {
 
     // ── CREATE ────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
-      const { type, category, description, amount, date, recurring } = req.body;
+      const { type, category, description, amount, date, recurring, notes } = req.body;
       if (!type || !category || !description || !amount || !date) {
         return res.status(400).json({ error: 'Campos obrigatórios: type, category, description, amount, date' });
       }
       const { rows } = await sql`
-        INSERT INTO entries (type, category, description, amount, date, recurring)
-        VALUES (${type}, ${category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring})
+        INSERT INTO entries (type, category, description, amount, date, recurring, notes)
+        VALUES (${type}, ${category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${notes||null})
         RETURNING *
       `;
       return res.status(201).json(rows[0]);
@@ -56,11 +56,11 @@ export default async function handler(req, res) {
     if (req.method === 'PUT') {
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: 'id obrigatório' });
-      const { type, category, description, amount, date, recurring } = req.body;
+      const { type, category, description, amount, date, recurring, notes } = req.body;
       const { rows } = await sql`
         UPDATE entries
         SET type=${type}, category=${category}, description=${description},
-            amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}
+            amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}, notes=${notes||null}
         WHERE id=${parseInt(id, 10)}
         RETURNING *
       `;
@@ -85,8 +85,8 @@ export default async function handler(req, res) {
       const inserted = [];
       for (const e of bulk) {
         const { rows } = await sql`
-          INSERT INTO entries (type, category, description, amount, date, recurring)
-          VALUES (${e.type}, ${e.category}, ${e.description}, ${parseFloat(e.amount)}, ${e.date}, ${!!e.recurring})
+          INSERT INTO entries (type, category, description, amount, date, recurring, notes)
+          VALUES (${e.type}, ${e.category}, ${e.description}, ${parseFloat(e.amount)}, ${e.date}, ${!!e.recurring}, ${e.notes||null})
           RETURNING *
         `;
         inserted.push(rows[0]);
