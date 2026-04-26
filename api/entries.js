@@ -6,6 +6,17 @@ function cors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
+// Normaliza datas para "YYYY-MM-DD" antes de devolver ao frontend
+function normDate(d) {
+  if (!d) return d;
+  const s = d instanceof Date ? d.toISOString() : String(d);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+function normalizeRows(rows) {
+  return rows.map(r => ({ ...r, date: normDate(r.date) }));
+}
+
 export default async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -19,7 +30,7 @@ export default async function handler(req, res) {
         const { rows } = await sql`
           SELECT * FROM entries ORDER BY date DESC
         `;
-        return res.status(200).json(rows);
+        return res.status(200).json(normalizeRows(rows));
       }
 
       if (month !== undefined && year !== undefined) {
@@ -31,11 +42,11 @@ export default async function handler(req, res) {
             AND EXTRACT(YEAR  FROM date) = ${y}
           ORDER BY date DESC, created_at DESC
         `;
-        return res.status(200).json(rows);
+        return res.status(200).json(normalizeRows(rows));
       }
 
       const { rows } = await sql`SELECT * FROM entries ORDER BY date DESC`;
-      return res.status(200).json(rows);
+      return res.status(200).json(normalizeRows(rows));
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────
@@ -49,7 +60,7 @@ export default async function handler(req, res) {
         VALUES (${type}, ${category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${notes||null})
         RETURNING *
       `;
-      return res.status(201).json(rows[0]);
+      return res.status(201).json(normalizeRows(rows)[0]);
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────
@@ -65,7 +76,7 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       if (!rows.length) return res.status(404).json({ error: 'Lançamento não encontrado' });
-      return res.status(200).json(rows[0]);
+      return res.status(200).json(normalizeRows(rows)[0]);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────
@@ -91,7 +102,7 @@ export default async function handler(req, res) {
         `;
         inserted.push(rows[0]);
       }
-      return res.status(201).json(inserted);
+      return res.status(201).json(normalizeRows(inserted));
     }
 
     res.status(405).json({ error: 'Method not allowed' });
