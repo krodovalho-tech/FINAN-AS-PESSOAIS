@@ -32,11 +32,22 @@ const pct = (v, t) => t > 0 ? ((v / t) * 100).toFixed(1) : "0.0";
 const today = new Date().toISOString().split("T")[0];
 
 
-// ─── SAFE DATE PARSER ───────────────────────────────────────────────────────
+// ─── SAFE DATE HELPERS ──────────────────────────────────────────────────────
+// Extrai YYYY-MM-DD de qualquer formato (ISO, string, objeto Date)
 const parseDate = (d) => {
   if (!d) return new Date();
-  const part = typeof d === "string" ? d.split("T")[0] : d;
-  return new Date(part + "T12:00:00");
+  const s = typeof d === "string" ? d : (d instanceof Date ? d.toISOString() : String(d));
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00`);
+  return new Date(s);
+};
+// Formata como DD/MM/AAAA sem usar Date.toLocaleDateString (mais seguro)
+const fmtDate = (d) => {
+  if (!d) return "—";
+  const s = typeof d === "string" ? d : (d instanceof Date ? d.toISOString() : String(d));
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  try { return new Date(s).toLocaleDateString("pt-BR"); } catch(e) { return String(d).slice(0,10); }
 };
 
 // ─── AUTO-CATEGORIZAÇÃO ─────────────────────────────────────────────────────
@@ -857,7 +868,7 @@ export default function App() {
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
                         <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
-                          <span>{parseDate(e.date).toLocaleDateString("pt-BR")}</span>
+                          <span>{fmtDate(e.date)}</span>
                           {e.recurring && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>↻ recorrente</span>}
                         </div>
                       </div>
@@ -898,15 +909,4 @@ export default function App() {
         <p style={{ fontSize:"0.85rem",color:"#8a7a6a",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#e8d8c0" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
         <div style={{ display:"flex",gap:"0.6rem" }}>
           <button onClick={()=>setDelConfirm(null)} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-          <button onClick={()=>handleDelete(delConfirm)} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>Excluir</button>
-        </div>
-      </Modal>
-
-      <CategoryModal show={showCatManager} onClose={()=>setShowCatManager(false)} onSave={()=>setCustomCategories({expense:[...EXPENSE_CATEGORIES],income:[...INCOME_CATEGORIES]})}/>
-
-      {/* Import preview */}
-      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} onConfirm={handleImportConfirm}
-        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v}:e))}/>
-    </div>
-  );
-}
+          <button onClick={()=>handleDelete(delConfirm)} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borde
