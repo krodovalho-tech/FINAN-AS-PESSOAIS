@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Financeiro — Kleber Rodovalho</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#eef2ee;color:#1a1a1a;font-size:14px}
+header{background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:1.3rem;font-weight:700;letter-spacing:-.3px}
+header p{font-size:.8rem;opacity:.75;margin-top:3px}
+.logo{font-size:1.5rem;opacity:.9}
+.summary-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px 28px 0}
+.card{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:12px 0 0 12px}
+.card.jan::before{background:#2e7d32}
+.card.fev::before{background:#f57c00}
+.card.mar::before{background:#c62828}
+.card.abr::before{background:#6a1b9a}
+.card h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:6px}
+.card .amount{font-size:1.5rem;font-weight:700}
+.card.jan .amount{color:#2e7d32}
+.card.fev .amount{color:#f57c00}
+.card.mar .amount{color:#c62828}
+.card.abr .amount{color:#6a1b9a}
+.card .delta{font-size:.75rem;color:#aaa;margin-top:4px}
+.card .delta span{font-weight:600}
+.delta.up span{color:#c62828}
+.delta.down span{color:#2e7d32}
+.nav{display:flex;gap:0;padding:18px 28px 0;border-bottom:2px solid #dde8dd;background:#eef2ee}
+.tab{padding:10px 20px;cursor:pointer;font-size:.88rem;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:8px 8px 0 0;transition:all .2s;font-weight:500}
+.tab.active{color:#2e7d32;border-color:#2e7d32;background:#fff;font-weight:700}
+.tab:hover:not(.active){color:#333;background:#fff8}
+.pane{display:none;padding:22px 28px}
+.pane.active{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px}
+.box{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.box h3{font-size:.9rem;font-weight:700;color:#333;margin-bottom:14px}
+.box.full{grid-column:1/-1}
+.filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input{padding:7px 12px;border:1px solid #ddd;border-radius:8px;font-size:.83rem;outline:none;background:#fff}
+.filters select:focus,.filters input:focus{border-color:#2e7d32}
+.filters label{font-size:.82rem;color:#666;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{background:#f5f5f5;padding:9px 12px;text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:#888;border-bottom:1px solid #eee;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f9fff9}
+.badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:.72rem;font-weight:600}
+.badge.jan{background:#e8f5e9;color:#1b5e20}
+.badge.fev{background:#fff3e0;color:#e65100}
+.badge.mar{background:#fce4ec;color:#880e4f}
+.badge.abr{background:#f3e5f5;color:#4a148c}
+.badge.parc{background:#e3f2fd;color:#1565c0}
+.vr{color:#c62828;font-weight:700}
+.cat-sel{padding:4px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:.78rem;cursor:pointer;outline:none;background:#fafafa;max-width:160px}
+.cat-sel:focus{border-color:#2e7d32}
+.obs-inp{padding:4px 8px;border:1px solid #e8e8e8;border-radius:6px;font-size:.78rem;outline:none;background:#fafafa;width:160px;color:#555;transition:border .15s}
+.obs-inp:focus{border-color:#2e7d32;background:#fff}
+.obs-inp::placeholder{color:#ccc}
+.nova-cat-btn{display:inline-block;padding:3px 8px;font-size:.72rem;color:#1565c0;cursor:pointer;border:1px dashed #90caf9;border-radius:5px;margin-top:3px;background:#e3f2fd;white-space:nowrap}
+.nova-cat-btn:hover{background:#bbdefb}
+.alert-box{background:#fff8e1;border-left:4px solid #f9a825;border-radius:8px;padding:14px 16px;margin-bottom:16px}
+.alert-box.red{background:#ffebee;border-color:#c62828}
+.alert-box h4{font-size:.85rem;font-weight:700;color:#5d4037;margin-bottom:5px}
+.alert-box.red h4{color:#b71c1c}
+.alert-box p{font-size:.8rem;color:#6d4c41;line-height:1.6}
+.proj-month{font-weight:700;color:#1b5e20;background:#e8f5e9;padding:6px 12px;border-radius:6px}
+.proj-total{font-weight:700;color:#b71c1c}
+.txt-right{text-align:right}
+tfoot td{font-weight:700;background:#f8f8f8;border-top:2px solid #e0e0e0}
+.insight{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0f0}
+.insight:last-child{border-bottom:none}
+.insight .ico{font-size:1.3rem;flex-shrink:0;margin-top:2px}
+.insight .txt h4{font-size:.83rem;font-weight:700;margin-bottom:3px}
+.insight .txt p{font-size:.78rem;color:#666;line-height:1.5}
+.progress-bar{height:7px;background:#e0e0e0;border-radius:4px;overflow:hidden;margin-top:5px}
+.progress-fill{height:100%;border-radius:4px;background:#2e7d32;transition:width .5s}
+.cat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5}
+.cat-row:last-child{border-bottom:none}
+.cat-name{font-size:.82rem;font-weight:500}
+.cat-val{font-size:.82rem;font-weight:700;color:#c62828}
+.cat-pct{font-size:.75rem;color:#aaa;margin-left:6px}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.month-filter-btn{padding:5px 12px;border:1px solid #ddd;border-radius:20px;font-size:.78rem;cursor:pointer;background:#fff;transition:all .2s;font-weight:500}
+.month-filter-btn.active{background:#2e7d32;color:#fff;border-color:#2e7d32}
+canvas{max-height:260px}
+.stat-num{font-size:1.8rem;font-weight:800;color:#1b5e20}
+.stat-lbl{font-size:.72rem;color:#888;margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+.stat-sub{font-size:.78rem;color:#c62828;font-weight:600;margin-top:3px}
+
+/* ============================================================
+   MODAL IMPORTAR CSV
+   ============================================================ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:16px;width:min(96vw,820px);max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.25)}
+.modal-head{background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-head h2{font-size:1rem;font-weight:700;margin:0}
+.modal-head p{font-size:.78rem;opacity:.8;margin-top:3px}
+.modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.modal-body{overflow-y:auto;padding:24px;flex:1}
+.modal-footer{padding:14px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;background:#fafafa}
+
+/* Área de drop */
+.drop-zone{border:2.5px dashed #a5d6a7;border-radius:12px;padding:36px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#f9fff9;margin-bottom:18px}
+.drop-zone:hover,.drop-zone.dragging{border-color:#2e7d32;background:#e8f5e9}
+.drop-zone .dz-icon{font-size:2.4rem;margin-bottom:8px}
+.drop-zone p{color:#555;font-size:.88rem;margin:4px 0}
+.drop-zone small{color:#aaa;font-size:.76rem}
+
+/* Configuração de colunas */
+.col-config{background:#f5f5f5;border-radius:10px;padding:16px;margin-bottom:16px}
+.col-config h4{font-size:.82rem;font-weight:700;color:#333;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.col-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.col-field label{font-size:.72rem;color:#666;font-weight:600;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.col-field select{width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:7px;font-size:.8rem;background:#fff;outline:none}
+.col-field select:focus{border-color:#2e7d32}
+
+/* Configuração do mês */
+.month-config{display:flex;gap:14px;align-items:center;margin-bottom:16px;background:#e8f5e9;border-radius:10px;padding:14px 16px;flex-wrap:wrap}
+.month-config label{font-size:.82rem;font-weight:700;color:#2e7d32}
+.month-config select,.month-config input{padding:6px 12px;border:1px solid #c8e6c9;border-radius:7px;font-size:.83rem;outline:none;background:#fff}
+.month-config select:focus,.month-config input:focus{border-color:#2e7d32}
+
+/* Feedback de status */
+.parse-status{font-size:.82rem;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:none}
+.parse-status.ok{background:#e8f5e9;color:#1b5e20;border-left:4px solid #2e7d32;display:block}
+.parse-status.warn{background:#fff8e1;color:#5d4037;border-left:4px solid #f9a825;display:block}
+.parse-status.err{background:#ffebee;color:#b71c1c;border-left:4px solid #c62828;display:block}
+
+/* Preview table */
+.preview-wrap{max-height:280px;overflow-y:auto;border-radius:8px;border:1px solid #eee;margin-bottom:14px}
+.preview-wrap table{font-size:.77rem}
+.preview-wrap th{position:sticky;top:0;z-index:1;background:#f5f5f5}
+.preview-wrap td.skip{color:#bbb;text-decoration:line-through}
+.preview-wrap td.ok-val{color:#1b5e20;font-weight:700}
+.preview-wrap td.bad-val{color:#c62828}
+.row-toggle{cursor:pointer;user-select:none}
+.row-toggle input{margin:0}
+
+/* Botões */
+.btn{padding:8px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:#2e7d32;color:#fff}
+.btn-primary:hover{background:#1b5e20}
+.btn-primary:disabled{background:#a5d6a7;cursor:not-allowed}
+.btn-secondary{background:#f0f0f0;color:#333}
+.btn-secondary:hover{background:#e0e0e0}
+.btn-danger{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
+.btn-danger:hover{background:#ffcdd2}
+
+/* Separador visual */
+.separator{display:flex;align-items:center;gap:12px;margin:14px 0;color:#bbb;font-size:.75rem}
+.separator::before,.separator::after{content:'';flex:1;height:1px;background:#eee}
+
+/* Resumo de importação */
+.import-summary{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.imp-card{flex:1;min-width:100px;background:#f9f9f9;border-radius:8px;padding:10px 14px;text-align:center;border:1px solid #eee}
+.imp-card .imp-num{font-size:1.4rem;font-weight:800;color:#1b5e20}
+.imp-card .imp-lbl{font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 Dashboard Financeiro</h1>
+    <p>Kleber Rodovalho · Cartão Unicred Visa Infinite · Jan–Abr 2026</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button onclick="exportData()" title="Exportar backup JSON" style="padding:6px 13px;border:none;border-radius:7px;background:rgba(255,255,255,.15);color:#fff;font-size:.78rem;cursor:pointer;backdrop-filter:blur(4px)">💾 Exportar</button>
+    <button onclick="importData()" title="Importar backup JSON" style="padding:6px 13px;border:none;border-radius:7px;background:rgba(255,255,255,.15);color:#fff;font-size:.78rem;cursor:pointer;backdrop-filter:blur(4px)">📂 Importar</button>
+    <button onclick="openCSVImport()" title="Importar fatura CSV" style="padding:6px 13px;border:none;border-radius:7px;background:rgba(255,255,255,.25);color:#fff;font-size:.78rem;cursor:pointer;backdrop-filter:blur(4px);font-weight:700;border:1px solid rgba(255,255,255,.4)">📥 Nova Fatura CSV</button>
+    <div class="logo">🏦</div>
+  </div>
+</header>
+
+<div class="summary-bar">
+  <div class="card jan">
+    <h3>Janeiro 2026</h3>
+    <div class="amount">R$ 11.267,95</div>
+    <div class="delta">Referência inicial</div>
+  </div>
+  <div class="card fev">
+    <h3>Fevereiro 2026</h3>
+    <div class="amount">R$ 13.688,98</div>
+    <div class="delta up">▲ <span>+21,5%</span> vs jan</div>
+  </div>
+  <div class="card mar">
+    <h3>Março 2026</h3>
+    <div class="amount">R$ 18.761,71</div>
+    <div class="delta up">▲ <span>+37,1%</span> vs fev</div>
+  </div>
+  <div class="card abr">
+    <h3>Abril 2026</h3>
+    <div class="amount">R$ 19.541,00</div>
+    <div class="delta up">▲ <span>+4,2%</span> vs mar</div>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="tab active" onclick="showTab('visao')">📈 Visão Geral</div>
+  <div class="tab" onclick="showTab('lancamentos')">📋 Lançamentos</div>
+  <div class="tab" onclick="showTab('parcelas')">📅 Parcelas Futuras</div>
+  <div class="tab" onclick="showTab('analise')">🔍 Análise</div>
+</div>
+
+<!-- TAB: VISÃO GERAL -->
+<div class="pane active" id="tab-visao">
+  <div class="grid2">
+    <div class="box">
+      <h3>Evolução Mensal de Gastos</h3>
+      <canvas id="chartMensal"></canvas>
+    </div>
+    <div class="box">
+      <h3>Categorias — selecione o mês:
+        <span id="catMonthBtns" style="margin-left:8px">
+          <button class="month-filter-btn active" data-bill="all" onclick="updateCatChart('all',this)">Todos</button>
+          <button class="month-filter-btn" data-bill="jan" onclick="updateCatChart('jan',this)">Jan</button>
+          <button class="month-filter-btn" data-bill="fev" onclick="updateCatChart('fev',this)">Fev</button>
+          <button class="month-filter-btn" data-bill="mar" onclick="updateCatChart('mar',this)">Mar</button>
+          <button class="month-filter-btn" data-bill="abr" onclick="updateCatChart('abr',this)">Abr</button>
+        </span>
+      </h3>
+      <canvas id="chartCat"></canvas>
+    </div>
+  </div>
+  <div class="grid3">
+    <div class="box">
+      <h3>Total 4 Meses</h3>
+      <div class="stat-num">R$ 63.259</div>
+      <div class="stat-lbl">total acumulado</div>
+      <div class="stat-sub">▲ Crescimento de 73,4%<br>de Jan → Abr</div>
+    </div>
+    <div class="box">
+      <h3>Maior Categoria</h3>
+      <div class="stat-num" id="topCatVal">—</div>
+      <div class="stat-lbl" id="topCatName">calculando...</div>
+    </div>
+    <div class="box">
+      <h3>Parcelas em Aberto</h3>
+      <div class="stat-num">R$ 19.245</div>
+      <div class="stat-lbl">comprometidos pós-abril</div>
+      <div class="stat-sub">⚠️ R$ 6.502 refinanciamento (mai)</div>
+    </div>
+  </div>
+  <div class="box full">
+    <h3>Gastos por Categoria — Top 10 (todos os meses)</h3>
+    <div id="catBars"></div>
+  </div>
+</div>
+
+<!-- TAB: LANÇAMENTOS -->
+<div class="pane" id="tab-lancamentos">
+  <div class="box full" style="margin-bottom:14px">
+    <div class="filters">
+      <label>Mês:</label>
+      <select id="filtMes" onchange="renderTable()">
+        <option value="">Todos</option>
+        <option value="jan">Janeiro</option>
+        <option value="fev">Fevereiro</option>
+        <option value="mar">Março</option>
+        <option value="abr">Abril</option>
+      </select>
+      <label>Categoria:</label>
+      <select id="filtCat" onchange="renderTable()">
+        <option value="">Todas</option>
+      </select>
+      <label>Busca:</label>
+      <input type="text" id="filtBusca" placeholder="descrição..." oninput="renderTable()">
+      <label style="margin-left:auto;font-size:.8rem;color:#888" id="countLbl"></label>
+    </div>
+  </div>
+  <div class="box full" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto;max-height:560px;overflow-y:auto">
+      <table id="tblLanc">
+        <thead><tr>
+          <th>Mês</th><th>Data</th><th>Descrição</th><th>Parcela</th><th class="txt-right">Valor</th><th>Categoria</th><th>Observação</th>
+        </tr></thead>
+        <tbody id="tbodyLanc"></tbody>
+        <tfoot><tr>
+          <td colspan="4" class="txt-right">TOTAL FILTRADO:</td>
+          <td class="txt-right vr" id="totalFiltrado">R$ 0,00</td>
+          <td></td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: PARCELAS FUTURAS -->
+<div class="pane" id="tab-parcelas">
+  <div class="alert-box red">
+    <h4>⚠️ Atenção: Refinanciamento de Fatura</h4>
+    <p>Em março/2026 foi realizado refinanciamento de <strong>R$ 12.259,65</strong> da fatura anterior (rotativo a 12,99% a.m. / CET 1.440% a.a.). A 2ª parcela de <strong>R$ 6.502,06</strong> vence em mai/2026. Recomenda-se quitação imediata para evitar encargos altíssimos.</p>
+  </div>
+  <div class="grid2">
+    <div class="box">
+      <h3>Parcelas Comprometidas por Mês</h3>
+      <canvas id="chartParcelas"></canvas>
+    </div>
+    <div class="box">
+      <h3>Resumo de Comprometimento</h3>
+      <table>
+        <thead><tr><th>Mês</th><th class="txt-right">Parcelas (R$)</th><th class="txt-right">s/ Refinanc.</th></tr></thead>
+        <tbody id="tbodyProj"></tbody>
+        <tfoot><tr><td>TOTAL</td><td class="txt-right vr" id="projTotal"></td><td class="txt-right" id="projTotalSem"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+  <div class="box full">
+    <h3>Detalhe das Parcelas — selecione o mês:</h3>
+    <div class="filters" style="margin-bottom:12px">
+      <select id="projMonthSel" onchange="renderProjDetail()">
+        <option value="mai">Maio 2026</option>
+        <option value="jun">Junho 2026</option>
+        <option value="jul">Julho 2026</option>
+        <option value="ago">Agosto 2026</option>
+        <option value="set">Setembro 2026</option>
+        <option value="out">Outubro 2026</option>
+        <option value="nov">Novembro 2026</option>
+        <option value="dez">Dezembro 2026</option>
+      </select>
+    </div>
+    <table id="tblProjDetail">
+      <thead><tr><th>Descrição</th><th>Parcela</th><th class="txt-right">Valor (R$)</th></tr></thead>
+      <tbody id="tbodyProjDetail"></tbody>
+      <tfoot><tr><td colspan="2" class="txt-right">TOTAL DO MÊS:</td><td class="txt-right vr" id="projDetailTotal"></td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- TAB: ANÁLISE -->
+<div class="pane" id="tab-analise">
+  <div class="alert-box red" style="margin-bottom:14px">
+    <h4>🔴 Sinal de Alerta: Fatura crescendo 73% em 4 meses</h4>
+    <p>A fatura saltou de <strong>R$ 11.267 (jan)</strong> para <strong>R$ 19.541 (abr)</strong>. O refinanciamento em março indica que a fatura não foi paga integralmente — o rotativo da Unicred cobra <strong>12,99% a.m.</strong> sobre o saldo, o que compromete seriamente o fluxo de caixa.</p>
+  </div>
+  <div class="grid2" style="margin-bottom:14px">
+    <div class="box">
+      <h3>🔑 Pontos Críticos</h3>
+      <div class="insight">
+        <div class="ico">🏗️</div>
+        <div class="txt"><h4>Construção/Reforma — maior despesa</h4><p>R$ 23.840 acumulados em 4 meses. Marmotins (R$1.586/mês), Meurer Tintas (R$1.107/mês) e Atacadão das Tintas (R$715/mês) lideram. Ainda tem parcelas até jun/26.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">🍽️</div>
+        <div class="txt"><h4>Restaurantes — disparo em março</h4><p>Em março houve concentração de gastos em bares/restaurantes durante viagem (Barra Vento, Villa dos Poetas, REST Manga Rosa, Baía Grande etc.) somando ~R$ 4.500. Merece controle.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">⛽</div>
+        <div class="txt"><h4>Combustível — viagem em fev/mar</h4><p>Vários postos sequenciais (Posto Cacique 60, São Francis, Centro, Minas Gerais, Aliança Colinas, São Luís) em 15–21/fev indicam deslocamento longo — R$ 1.629 em combustível.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">🏦</div>
+        <div class="txt"><h4>Refinanciamento perigoso</h4><p>O crédito de refinanciamento de R$ 12.259,65 indica que a fatura de março não foi quitada integralmente. Com CET de 1.440% a.a., mesmo 1 mês no rotativo é devastador.</p></div>
+      </div>
+    </div>
+    <div class="box">
+      <h3>✅ Recomendações</h3>
+      <div class="insight">
+        <div class="ico">1️⃣</div>
+        <div class="txt"><h4>Quite o refinanciamento AGORA</h4><p>A parcela 2/2 de R$ 6.502 vence em mai/26. Priorize quitar esse valor para evitar novos juros. O rotativo Unicred é impraticável a 12,99%/mês.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">2️⃣</div>
+        <div class="txt"><h4>Limite obras a R$ 3.000/mês</h4><p>Construção/reforma está consumindo ~40% da fatura. Se as obras permitirem, negocie parcelamentos direto com fornecedores em vez de usar o cartão de crédito.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">3️⃣</div>
+        <div class="txt"><h4>Budget de R$ 800 para restaurantes</h4><p>Média atual: R$ 2.100/mês. Reduzir para R$ 800 libera R$ 1.300/mês para amortização de dívidas ou reserva de emergência.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">4️⃣</div>
+        <div class="txt"><h4>Meta: fatura abaixo de R$ 12.000/mês</h4><p>Com parcelas comprometidas de ~R$ 2.700/mês (pós quitação do refinanciamento em mai), é viável chegar a R$ 10–12k/mês a partir de jun/26 controlando consumo variável.</p></div>
+      </div>
+      <div class="insight">
+        <div class="ico">5️⃣</div>
+        <div class="txt"><h4>Reserve R$ 6.000/mês para investimento</h4><p>Após normalização, com disciplina, é possível redirecionar R$ 6.000/mês para CDB/LCI ou Tesouro Direto. Em 12 meses: R$ 72.000 + rendimento de ~12% a.a.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="box full">
+    <h3>📊 Ranking de Categorias — 4 Meses Consolidado</h3>
+    <div id="rankingFull"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: IMPORTAR FATURA CSV
+     ============================================================ -->
+<div class="modal-overlay" id="csvModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>📥 Importar Nova Fatura — CSV</h2>
+        <p>Adiciona os lançamentos ao dashboard sem apagar os meses anteriores</p>
+      </div>
+      <button class="modal-close" onclick="closeCSVImport()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- PASSO 1: Upload -->
+      <div id="csvStep1">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('csvFileInput').click()" ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="dzDrop(event)">
+          <div class="dz-icon">📄</div>
+          <p><strong>Clique aqui</strong> ou arraste o arquivo CSV da fatura</p>
+          <small>Formatos aceitos: .csv, .txt — separador ; ou , — qualquer encoding</small>
+        </div>
+        <input type="file" id="csvFileInput" accept=".csv,.txt,.tsv" style="display:none" onchange="handleCSVFile(this.files[0])">
+
+        <div class="separator">ou cole o texto abaixo</div>
+        <textarea id="csvPasteArea" placeholder="Cole aqui o conteúdo do CSV... (ex: copiar do Excel ou extrato do banco)" style="width:100%;height:100px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:.8rem;font-family:monospace;resize:vertical;outline:none" oninput="if(this.value.trim())parseCSVText(this.value)"></textarea>
+      </div>
+
+      <!-- STATUS -->
+      <div class="parse-status" id="parseStatus"></div>
+
+      <!-- PASSO 2: Configuração (aparece após parse) -->
+      <div id="csvStep2" style="display:none">
+
+        <!-- Configurar mês da fatura -->
+        <div class="month-config">
+          <label>📅 Esta fatura é referente ao mês:</label>
+          <select id="csvMes">
+            <option value="mai">Maio 2026</option>
+            <option value="jun">Junho 2026</option>
+            <option value="jul">Julho 2026</option>
+            <option value="ago">Agosto 2026</option>
+            <option value="set">Setembro 2026</option>
+            <option value="out">Outubro 2026</option>
+            <option value="nov">Novembro 2026</option>
+            <option value="dez">Dezembro 2026</option>
+            <option value="jan27">Janeiro 2027</option>
+            <option value="fev27">Fevereiro 2027</option>
+          </select>
+          <label style="margin-left:12px">Nome da aba:</label>
+          <input type="text" id="csvMesLabel" placeholder="ex: Maio/26" style="width:100px" value="Maio/26">
+        </div>
+
+        <!-- Mapeamento de colunas -->
+        <div class="col-config">
+          <h4>🗂️ Mapeamento de colunas — confirme quais colunas correspondem a cada campo</h4>
+          <div class="col-grid" id="colGrid"></div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="import-summary" id="importSummary"></div>
+
+        <!-- Preview -->
+        <h4 style="font-size:.85rem;font-weight:700;margin-bottom:8px;color:#333">
+          Prévia dos lançamentos
+          <span style="font-size:.75rem;color:#888;font-weight:400;margin-left:6px">— desmarque linhas que não devem ser importadas</span>
+        </h4>
+        <div class="preview-wrap" id="previewWrap"></div>
+
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="resetCSVModal()">🔄 Recomeçar</button>
+      <button class="btn btn-secondary" onclick="closeCSVImport()">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmImport" onclick="confirmImport()" disabled>✅ Confirmar Importação</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DADOS
+// ============================================================
+const CATS = [
+  'Construção/Reforma','Supermercado','Restaurantes/Delivery',
+  'Transporte/Auto','Saúde/Farmácia','Tecnologia/Assinaturas',
+  'Educação','Casa/Doméstico','Pet/Animais','Beleza/Estética',
+  'Lazer/Esportes','Vestuário/Moda','Serviços Financeiros',
+  'Compras Online','Outros'
+];
+
+const CAT_COLORS = [
+  '#1b5e20','#2e7d32','#f57c00','#c62828','#6a1b9a','#01579b',
+  '#004d40','#bf360c','#880e4f','#e91e63','#1565c0','#6d4c41',
+  '#37474f','#558b2f','#9e9e9e'
+];
+
+// ============================================================
+// PERSISTÊNCIA — localStorage
+// ============================================================
+const LS_KEY = 'fin_dashboard_kleber_v1';
+
+function saveData(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({userCats, userObs, customCats}));
+  }catch(e){}
+}
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d.userCats)   Object.assign(userCats,  d.userCats);
+    if(d.userObs)    Object.assign(userObs,   d.userObs);
+    if(d.customCats) d.customCats.forEach(c=>{
+      if(!CATS.includes(c)&&!customCats.includes(c)){
+        customCats.push(c);
+        CAT_COLORS.push('#'+Math.floor(Math.random()*0xbbbbbb+0x222222).toString(16).padStart(6,'0'));
+      }
+    });
+  }catch(e){}
+}
+
+function exportData(){
+  const raw = localStorage.getItem(LS_KEY)||'{}';
+  const blob = new Blob([raw],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'dashboard_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+}
+
+function importData(){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const d=JSON.parse(ev.target.result);
+        if(d.userCats)  Object.assign(userCats, d.userCats);
+        if(d.userObs)   Object.assign(userObs,  d.userObs);
+        if(d.customCats) d.customCats.forEach(c=>{
+          if(!CATS.includes(c)&&!customCats.includes(c)){
+            customCats.push(c);
+            CAT_COLORS.push('#777');
+            const filtCatEl=document.getElementById('filtCat');
+            const o=document.createElement('option');o.value=c;o.textContent=c;filtCatEl.appendChild(o);
+          }
+        });
+        saveData();
+        T=T.map(t=>({...t,cat:userCats[t.id]||t.cat}));
+        renderCatBars(); updateCatChart('all',document.querySelector('.month-filter-btn.active')); renderTable();
+        alert('Backup importado com sucesso!');
+      }catch(ex){alert('Arquivo inválido.');}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+// Mapa de categorias e observações salvo pelo usuário
+let userCats = {};
+let userObs  = {};
+let customCats = [];
+
+function fmtBRL(v){return'R$ '+v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
+
+// ============================================================
+// TRANSAÇÕES (todas as 4 faturas)
+// ============================================================
+let T = [
+// ---- JANEIRO 2026 ----
+{id:1,bill:'jan',date:'02/jun',desc:'AMAZON BR',val:146.20,parc:'7/10',cat:'Tecnologia/Assinaturas'},
+{id:2,bill:'jan',date:'02/jun',desc:'AMAZON BR',val:30.71,parc:'7/7',cat:'Tecnologia/Assinaturas'},
+{id:3,bill:'jan',date:'11/jul',desc:'ARCELOR MITTAL',val:554.10,parc:'6/6',cat:'Construção/Reforma'},
+{id:4,bill:'jan',date:'23/jul',desc:'MCM CLINICA MEDICA',val:107.14,parc:'6/7',cat:'Saúde/Farmácia'},
+{id:5,bill:'jan',date:'11/ago',desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'5/10',cat:'Construção/Reforma'},
+{id:6,bill:'jan',date:'14/ago',desc:'CENTAURO CE139',val:106.24,parc:'5/8',cat:'Lazer/Esportes'},
+{id:7,bill:'jan',date:'03/set',desc:'MERCADO*GROWTHSUPPLEM',val:95.78,parc:'4/6',cat:'Saúde/Farmácia'},
+{id:8,bill:'jan',date:'15/set',desc:'ATACADAO DAS TINTAS',val:715.14,parc:'4/7',cat:'Construção/Reforma'},
+{id:9,bill:'jan',date:'17/set',desc:'CASA DO VIDRACEIRO',val:888.59,parc:'4/6',cat:'Construção/Reforma'},
+{id:10,bill:'jan',date:'15/out',desc:'MARMOTINS',val:1586.06,parc:'3/7',cat:'Construção/Reforma'},
+{id:11,bill:'jan',date:'28/out',desc:'GRUPO OLX FA0765',val:80.66,parc:'3/3',cat:'Compras Online'},
+{id:12,bill:'jan',date:'28/out',desc:'MERCADOLIVRE*INTEGRA',val:35.73,parc:'3/3',cat:'Compras Online'},
+{id:13,bill:'jan',date:'30/out',desc:'PAGUE MENOS 0308',val:42.62,parc:'3/4',cat:'Saúde/Farmácia'},
+{id:14,bill:'jan',date:'05/nov',desc:'NOVA PPA PALMAS',val:337.66,parc:'2/6',cat:'Construção/Reforma'},
+{id:15,bill:'jan',date:'14/nov',desc:'SUBWAY',val:60.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:16,bill:'jan',date:'14/nov',desc:'MERCADOLIVRE*MERCADOLI',val:260.58,parc:'2/2',cat:'Compras Online'},
+{id:17,bill:'jan',date:'17/nov',desc:'PNEUSTORE CPX',val:175.56,parc:'2/8',cat:'Transporte/Auto'},
+{id:18,bill:'jan',date:'21/nov',desc:'R7 PNEUS',val:95.00,parc:'2/2',cat:'Transporte/Auto'},
+{id:19,bill:'jan',date:'28/nov',desc:'ELIAS MATERIAIS',val:116.66,parc:'2/3',cat:'Construção/Reforma'},
+{id:20,bill:'jan',date:'01/dez',desc:'CASA DE BOLOS PALMAS',val:12.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:21,bill:'jan',date:'02/dez',desc:'Anuidade - parcela',val:79.16,parc:null,cat:'Serviços Financeiros'},
+{id:22,bill:'jan',date:'02/dez',desc:'LANCHES E CIA',val:23.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:23,bill:'jan',date:'03/dez',desc:'ATACADAO DOS PREC',val:27.05,parc:null,cat:'Supermercado'},
+{id:24,bill:'jan',date:'03/dez',desc:'SESC TOCANTINS',val:12.56,parc:null,cat:'Lazer/Esportes'},
+{id:25,bill:'jan',date:'03/dez',desc:'SUBWAY',val:116.53,parc:null,cat:'Restaurantes/Delivery'},
+{id:26,bill:'jan',date:'03/dez',desc:'SESC TOCANTINS',val:45.01,parc:null,cat:'Lazer/Esportes'},
+{id:27,bill:'jan',date:'04/dez',desc:'MAYSA BESERRA DA SILVA',val:31.50,parc:null,cat:'Beleza/Estética'},
+{id:28,bill:'jan',date:'04/dez',desc:'SUPERMERCADO REAL',val:34.99,parc:null,cat:'Supermercado'},
+{id:29,bill:'jan',date:'04/dez',desc:'BERTORIA RESTAURANTE',val:66.29,parc:null,cat:'Restaurantes/Delivery'},
+{id:30,bill:'jan',date:'04/dez',desc:'ELYABRAODEANDRADE',val:112.60,parc:null,cat:'Outros'},
+{id:31,bill:'jan',date:'05/dez',desc:'VITORGUILHERME',val:30.00,parc:null,cat:'Outros'},
+{id:32,bill:'jan',date:'05/dez',desc:'SESC TOCANTINS',val:21.72,parc:null,cat:'Lazer/Esportes'},
+{id:33,bill:'jan',date:'05/dez',desc:'SESC TOCANTINS',val:29.07,parc:null,cat:'Lazer/Esportes'},
+{id:34,bill:'jan',date:'05/dez',desc:'SESC TOCANTINS',val:29.52,parc:null,cat:'Lazer/Esportes'},
+{id:35,bill:'jan',date:'05/dez',desc:'MEP*NACHO MAN PALMAS',val:5.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:36,bill:'jan',date:'07/dez',desc:'AMANDA BRIGADEIRO DOCE',val:61.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:37,bill:'jan',date:'07/dez',desc:'ATACADAO DOS PREC',val:103.98,parc:null,cat:'Supermercado'},
+{id:38,bill:'jan',date:'08/dez',desc:'SESC TOCANTINS',val:4.00,parc:null,cat:'Lazer/Esportes'},
+{id:39,bill:'jan',date:'09/dez',desc:'ATACADAO DOS PREC',val:118.23,parc:null,cat:'Supermercado'},
+{id:40,bill:'jan',date:'09/dez',desc:'SESC TOCANTINS',val:51.19,parc:null,cat:'Lazer/Esportes'},
+{id:41,bill:'jan',date:'10/dez',desc:'SESC TOCANTINS',val:47.31,parc:null,cat:'Lazer/Esportes'},
+{id:42,bill:'jan',date:'10/dez',desc:'ATACADAO DOS PREC',val:39.36,parc:null,cat:'Supermercado'},
+{id:43,bill:'jan',date:'10/dez',desc:'SESC TOCANTINS',val:9.00,parc:null,cat:'Lazer/Esportes'},
+{id:44,bill:'jan',date:'10/dez',desc:'EMPORIO GRILL',val:110.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:45,bill:'jan',date:'11/dez',desc:'ATACADAO DOS PREC',val:34.58,parc:null,cat:'Supermercado'},
+{id:46,bill:'jan',date:'12/dez',desc:'MERCADOLIVRE*MERCADOLI',val:101.85,parc:null,cat:'Compras Online'},
+{id:47,bill:'jan',date:'12/dez',desc:'GIGANTE',val:57.97,parc:null,cat:'Supermercado'},
+{id:48,bill:'jan',date:'12/dez',desc:'AMANDA BRIGADEIRO DOCE',val:45.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:49,bill:'jan',date:'13/dez',desc:'IOF - OPENAI CHATGPT',val:3.80,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:50,bill:'jan',date:'13/dez',desc:'ATACADAO DOS PREC',val:161.31,parc:null,cat:'Supermercado'},
+{id:51,bill:'jan',date:'13/dez',desc:'OPENAI*CHATGPT SUBSCR',val:108.46,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:52,bill:'jan',date:'13/dez',desc:'MERCADOLIVRE*ECOMFORCE',val:247.27,parc:'1/2',cat:'Compras Online'},
+{id:53,bill:'jan',date:'14/dez',desc:'ASSADOS DA 504 NORTE',val:50.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:54,bill:'jan',date:'14/dez',desc:'UNIAO AGROPET',val:120.00,parc:null,cat:'Pet/Animais'},
+{id:55,bill:'jan',date:'14/dez',desc:'UNIAO AGROPET',val:19.00,parc:null,cat:'Pet/Animais'},
+{id:56,bill:'jan',date:'14/dez',desc:'ATACADAO DOS PREC',val:42.78,parc:null,cat:'Supermercado'},
+{id:57,bill:'jan',date:'15/dez',desc:'TOKIO MARINE*AUTO05D10',val:212.77,parc:null,cat:'Transporte/Auto'},
+{id:58,bill:'jan',date:'16/dez',desc:'ATACADAO DOS PREC',val:84.65,parc:null,cat:'Supermercado'},
+{id:59,bill:'jan',date:'16/dez',desc:'DROGASIL 3499',val:48.40,parc:null,cat:'Saúde/Farmácia'},
+{id:60,bill:'jan',date:'16/dez',desc:'REZENHA',val:55.97,parc:null,cat:'Lazer/Esportes'},
+{id:61,bill:'jan',date:'16/dez',desc:'ATACADAO DOS PREC',val:71.82,parc:null,cat:'Supermercado'},
+{id:62,bill:'jan',date:'17/dez',desc:'JIM.COM*SARALANE CASTRO',val:350.00,parc:null,cat:'Beleza/Estética'},
+{id:63,bill:'jan',date:'17/dez',desc:'UBER*PENDING',val:24.18,parc:null,cat:'Transporte/Auto'},
+{id:64,bill:'jan',date:'17/dez',desc:'UBER*PENDING',val:19.19,parc:null,cat:'Transporte/Auto'},
+{id:65,bill:'jan',date:'17/dez',desc:'MERCADOLIVRE*2PRODUTOS',val:187.46,parc:null,cat:'Compras Online'},
+{id:66,bill:'jan',date:'18/dez',desc:'MERCADO*LOJADOMECANIC',val:192.08,parc:null,cat:'Transporte/Auto'},
+{id:67,bill:'jan',date:'18/dez',desc:'MERCADOLIVRE*MERCADOLI',val:29.98,parc:null,cat:'Compras Online'},
+{id:68,bill:'jan',date:'19/dez',desc:'DL*GOOGLE GOOGLE',val:9.99,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:69,bill:'jan',date:'22/dez',desc:'CONSTRUPISO',val:79.90,parc:null,cat:'Construção/Reforma'},
+{id:70,bill:'jan',date:'22/dez',desc:'RESTAURANTE SEARA',val:171.56,parc:null,cat:'Restaurantes/Delivery'},
+{id:71,bill:'jan',date:'22/dez',desc:'MERCADOLIVRE*MERCADOLI',val:50.78,parc:'1/6',cat:'Compras Online'},
+{id:72,bill:'jan',date:'23/dez',desc:'ATACADAO DOS PREC',val:45.77,parc:null,cat:'Supermercado'},
+{id:73,bill:'jan',date:'25/dez',desc:'FABIOOLIVEIRADEFA',val:53.50,parc:null,cat:'Outros'},
+{id:74,bill:'jan',date:'25/dez',desc:'RAIA DROGASIL SA',val:64.79,parc:null,cat:'Saúde/Farmácia'},
+{id:75,bill:'jan',date:'26/dez',desc:'MP*SHAWARMAHOUSE',val:125.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:76,bill:'jan',date:'26/dez',desc:'MADEICOM',val:52.38,parc:null,cat:'Construção/Reforma'},
+{id:77,bill:'jan',date:'26/dez',desc:'MP*WIFILAVAJATO',val:70.00,parc:null,cat:'Casa/Doméstico'},
+{id:78,bill:'jan',date:'27/dez',desc:'SMF MATERIAL DE CONSTRU',val:57.00,parc:null,cat:'Construção/Reforma'},
+{id:79,bill:'jan',date:'27/dez',desc:'R7 PNEUS',val:112.50,parc:'1/4',cat:'Transporte/Auto'},
+{id:80,bill:'jan',date:'30/dez',desc:'DONNA VITORIA RESTAURA',val:251.58,parc:null,cat:'Restaurantes/Delivery'},
+{id:81,bill:'jan',date:'12/dez',desc:'GRUPO OLX 21A660',val:80.67,parc:'1/3',cat:'Compras Online'},
+{id:82,bill:'jan',date:'12/dez',desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'1/6',cat:'Compras Online'},
+
+// ---- FEVEREIRO 2026 ----
+{id:100,bill:'fev',date:'02/jun',desc:'AMAZON BR',val:146.20,parc:'8/10',cat:'Tecnologia/Assinaturas'},
+{id:101,bill:'fev',date:'23/jul',desc:'MCM CLINICA MEDICA',val:107.14,parc:'7/7',cat:'Saúde/Farmácia'},
+{id:102,bill:'fev',date:'11/ago',desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'6/10',cat:'Construção/Reforma'},
+{id:103,bill:'fev',date:'14/ago',desc:'CENTAURO CE139',val:106.24,parc:'6/8',cat:'Lazer/Esportes'},
+{id:104,bill:'fev',date:'03/set',desc:'MERCADO*GROWTHSUPPLEM',val:95.78,parc:'5/6',cat:'Saúde/Farmácia'},
+{id:105,bill:'fev',date:'15/set',desc:'ATACADAO DAS TINTAS',val:715.14,parc:'5/7',cat:'Construção/Reforma'},
+{id:106,bill:'fev',date:'17/set',desc:'CASA DO VIDRACEIRO',val:888.59,parc:'5/6',cat:'Construção/Reforma'},
+{id:107,bill:'fev',date:'15/out',desc:'MARMOTINS',val:1586.06,parc:'4/7',cat:'Construção/Reforma'},
+{id:108,bill:'fev',date:'30/out',desc:'PAGUE MENOS 0308',val:42.62,parc:'4/4',cat:'Saúde/Farmácia'},
+{id:109,bill:'fev',date:'05/nov',desc:'NOVA PPA PALMAS',val:337.66,parc:'3/6',cat:'Construção/Reforma'},
+{id:110,bill:'fev',date:'17/nov',desc:'PNEUSTORE CPX',val:175.56,parc:'3/8',cat:'Transporte/Auto'},
+{id:111,bill:'fev',date:'28/nov',desc:'ELIAS MATERIAIS',val:116.66,parc:'3/3',cat:'Construção/Reforma'},
+{id:112,bill:'fev',date:'12/dez',desc:'GRUPO OLX 21A660',val:80.66,parc:'2/3',cat:'Compras Online'},
+{id:113,bill:'fev',date:'12/dez',desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'2/6',cat:'Compras Online'},
+{id:114,bill:'fev',date:'13/dez',desc:'MERCADOLIVRE*ECOMFORCE',val:247.27,parc:'2/2',cat:'Compras Online'},
+{id:115,bill:'fev',date:'22/dez',desc:'MERCADOLIVRE*MERCADOLI',val:50.73,parc:'2/6',cat:'Compras Online'},
+{id:116,bill:'fev',date:'27/dez',desc:'R7 PNEUS',val:112.50,parc:'2/4',cat:'Transporte/Auto'},
+{id:117,bill:'fev',date:'02/jan',desc:'MERCADO*MERCADOLIVRE',val:39.50,parc:null,cat:'Compras Online'},
+{id:118,bill:'fev',date:'03/jan',desc:'MERCADO*MERCADOLIVRE',val:119.00,parc:null,cat:'Compras Online'},
+{id:119,bill:'fev',date:'04/jan',desc:'JARDIM BUFFET',val:91.29,parc:null,cat:'Restaurantes/Delivery'},
+{id:120,bill:'fev',date:'05/jan',desc:'UBER*TRIP HELP',val:5.00,parc:null,cat:'Transporte/Auto'},
+{id:121,bill:'fev',date:'05/jan',desc:'UBER*PENDING',val:10.72,parc:null,cat:'Transporte/Auto'},
+{id:122,bill:'fev',date:'05/jan',desc:'UBER*PENDING',val:30.32,parc:null,cat:'Transporte/Auto'},
+{id:123,bill:'fev',date:'05/jan',desc:'UBER*PENDING',val:12.02,parc:null,cat:'Transporte/Auto'},
+{id:124,bill:'fev',date:'05/jan',desc:'UBER*PENDING',val:19.27,parc:null,cat:'Transporte/Auto'},
+{id:125,bill:'fev',date:'06/jan',desc:'Anuidade - parcela',val:79.16,parc:null,cat:'Serviços Financeiros'},
+{id:126,bill:'fev',date:'06/jan',desc:'EMPORIO GRILL RESTAURA',val:162.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:127,bill:'fev',date:'06/jan',desc:'UBER*PENDING',val:11.27,parc:null,cat:'Transporte/Auto'},
+{id:128,bill:'fev',date:'06/jan',desc:'PALACIO DAS BATERIAS E AU',val:198.96,parc:'1/6',cat:'Transporte/Auto'},
+{id:129,bill:'fev',date:'07/jan',desc:'RIQUENA NETO AR CONDICI',val:257.42,parc:'1/8',cat:'Casa/Doméstico'},
+{id:130,bill:'fev',date:'09/jan',desc:'ATACADAO DOS PREC',val:338.93,parc:null,cat:'Supermercado'},
+{id:131,bill:'fev',date:'09/jan',desc:'MERCADOLIVRE*MERCADOLI',val:100.30,parc:null,cat:'Compras Online'},
+{id:132,bill:'fev',date:'10/jan',desc:'ATACADAO DOS PREC',val:37.10,parc:null,cat:'Supermercado'},
+{id:133,bill:'fev',date:'10/jan',desc:'ATACADAO DOS PREC',val:191.59,parc:null,cat:'Supermercado'},
+{id:134,bill:'fev',date:'11/jan',desc:'SUPERPALMAS SUPER',val:72.47,parc:null,cat:'Supermercado'},
+{id:135,bill:'fev',date:'11/jan',desc:'SERRA GRANDE SUPERMERC',val:26.46,parc:null,cat:'Supermercado'},
+{id:136,bill:'fev',date:'11/jan',desc:'PANIFICADORA REAL',val:15.56,parc:null,cat:'Supermercado'},
+{id:137,bill:'fev',date:'11/jan',desc:'MP*BIOPEIXES123',val:17.75,parc:null,cat:'Supermercado'},
+{id:138,bill:'fev',date:'11/jan',desc:'ATACADAO DOS PREC',val:53.88,parc:null,cat:'Supermercado'},
+{id:139,bill:'fev',date:'12/jan',desc:'ATACADAO DOS PREC',val:79.32,parc:null,cat:'Supermercado'},
+{id:140,bill:'fev',date:'13/jan',desc:'IOF - OPENAI CHATGPT',val:3.76,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:141,bill:'fev',date:'13/jan',desc:'AMAZON DIGITAL BR',val:14.90,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:142,bill:'fev',date:'13/jan',desc:'OPENAI*CHATGPT SUBSCR',val:107.51,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:143,bill:'fev',date:'14/jan',desc:'TOKIO MARINE*AUTO06D10',val:212.77,parc:null,cat:'Transporte/Auto'},
+{id:144,bill:'fev',date:'14/jan',desc:'ATACADAO DOS PREC',val:33.41,parc:null,cat:'Supermercado'},
+{id:145,bill:'fev',date:'14/jan',desc:'MERCADOLIVRE*BALALAMIX',val:258.00,parc:null,cat:'Compras Online'},
+{id:146,bill:'fev',date:'14/jan',desc:'MP*BORRACHARIA E AUTOPE',val:25.00,parc:null,cat:'Transporte/Auto'},
+{id:147,bill:'fev',date:'14/jan',desc:'ATACADAO DOS PREC',val:105.57,parc:null,cat:'Supermercado'},
+{id:148,bill:'fev',date:'14/jan',desc:'M C ATACADISTA',val:210.00,parc:null,cat:'Supermercado'},
+{id:149,bill:'fev',date:'14/jan',desc:'SOL COMERCIO E SERVICOS',val:242.63,parc:'1/3',cat:'Construção/Reforma'},
+{id:150,bill:'fev',date:'15/jan',desc:'DOM CHURRASCO',val:178.50,parc:null,cat:'Restaurantes/Delivery'},
+{id:151,bill:'fev',date:'15/jan',desc:'NORTE PISCINAS',val:167.34,parc:'1/3',cat:'Casa/Doméstico'},
+{id:152,bill:'fev',date:'16/jan',desc:'INDIGO',val:13.00,parc:null,cat:'Outros'},
+{id:153,bill:'fev',date:'16/jan',desc:'CACAU SHOW',val:40.92,parc:null,cat:'Restaurantes/Delivery'},
+{id:154,bill:'fev',date:'16/jan',desc:'INDIGO',val:13.00,parc:null,cat:'Outros'},
+{id:155,bill:'fev',date:'16/jan',desc:'ATACADAO DOS PREC',val:156.07,parc:null,cat:'Supermercado'},
+{id:156,bill:'fev',date:'16/jan',desc:'GRUPO OLX 9CB36F',val:44.38,parc:'1/3',cat:'Compras Online'},
+{id:157,bill:'fev',date:'17/jan',desc:'ALVORADA CORTES PREMIU',val:72.65,parc:null,cat:'Beleza/Estética'},
+{id:158,bill:'fev',date:'17/jan',desc:'ACAI COM',val:36.77,parc:null,cat:'Restaurantes/Delivery'},
+{id:159,bill:'fev',date:'17/jan',desc:'MOORANGO RESTAURANTE',val:98.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:160,bill:'fev',date:'17/jan',desc:'PETZ PALMAS',val:73.99,parc:null,cat:'Pet/Animais'},
+{id:161,bill:'fev',date:'17/jan',desc:'MEURER TINTAS E SERVIO',val:89.94,parc:'1/3',cat:'Construção/Reforma'},
+{id:162,bill:'fev',date:'17/jan',desc:'DMV LTDA',val:112.00,parc:null,cat:'Outros'},
+{id:163,bill:'fev',date:'18/jan',desc:'ATACADAO DOS PREC',val:87.98,parc:null,cat:'Supermercado'},
+{id:164,bill:'fev',date:'19/jan',desc:'ATACADAO DOS PREC',val:14.67,parc:null,cat:'Supermercado'},
+{id:165,bill:'fev',date:'19/jan',desc:'RENACOR TINTAS',val:424.92,parc:null,cat:'Construção/Reforma'},
+{id:166,bill:'fev',date:'19/jan',desc:'PANIFICADORA REAL',val:16.77,parc:null,cat:'Supermercado'},
+{id:167,bill:'fev',date:'19/jan',desc:'EC*GROWTHSUPPLEM',val:75.68,parc:'1/6',cat:'Saúde/Farmácia'},
+{id:168,bill:'fev',date:'19/jan',desc:'DL*GOOGLE GOOGLE',val:9.99,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:169,bill:'fev',date:'20/jan',desc:'JIM.COM*SARALANE CASTRO',val:382.94,parc:null,cat:'Beleza/Estética'},
+{id:170,bill:'fev',date:'20/jan',desc:'MAYSA BESERRA DA SILVA',val:7.00,parc:null,cat:'Beleza/Estética'},
+{id:171,bill:'fev',date:'20/jan',desc:'MAYSA BESERRA DA SILVA',val:27.00,parc:null,cat:'Beleza/Estética'},
+{id:172,bill:'fev',date:'20/jan',desc:'FTD EDUCACAO',val:303.35,parc:'1/6',cat:'Educação'},
+{id:173,bill:'fev',date:'21/jan',desc:'ATACADAO DOS PREC',val:51.24,parc:null,cat:'Supermercado'},
+{id:174,bill:'fev',date:'21/jan',desc:'SESC TOCANTINS',val:113.34,parc:'1/3',cat:'Lazer/Esportes'},
+{id:175,bill:'fev',date:'22/jan',desc:'EXATA COPIADORA',val:24.00,parc:null,cat:'Outros'},
+{id:176,bill:'fev',date:'23/jan',desc:'ATACADAO DOS PREC',val:24.95,parc:null,cat:'Supermercado'},
+{id:177,bill:'fev',date:'23/jan',desc:'DONNA VITORIA RESTAURA',val:349.36,parc:null,cat:'Restaurantes/Delivery'},
+{id:178,bill:'fev',date:'24/jan',desc:'ASSADOS DA 504 NORTE',val:80.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:179,bill:'fev',date:'24/jan',desc:'DROGASIL 4369',val:97.99,parc:null,cat:'Saúde/Farmácia'},
+{id:180,bill:'fev',date:'24/jan',desc:'MINEIRINHA',val:100.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:181,bill:'fev',date:'24/jan',desc:'MAYSA BESERRA DA SILVA',val:24.00,parc:null,cat:'Beleza/Estética'},
+{id:182,bill:'fev',date:'24/jan',desc:'FERRAGISTA ALVES E SCOR',val:23.48,parc:null,cat:'Construção/Reforma'},
+{id:183,bill:'fev',date:'24/jan',desc:'MERCADO*MERCADOLIVRE',val:60.00,parc:'1/3',cat:'Compras Online'},
+{id:184,bill:'fev',date:'25/jan',desc:'SUPERPALMAS SUPER',val:91.88,parc:null,cat:'Supermercado'},
+{id:185,bill:'fev',date:'25/jan',desc:'ATACADAO DOS PREC',val:19.01,parc:null,cat:'Supermercado'},
+{id:186,bill:'fev',date:'25/jan',desc:'ATACADAO DOS PREC',val:59.46,parc:null,cat:'Supermercado'},
+{id:187,bill:'fev',date:'26/jan',desc:'MP*ROUTEHAMBURGU',val:6.50,parc:null,cat:'Restaurantes/Delivery'},
+{id:188,bill:'fev',date:'27/jan',desc:'NOVO POINT DO ESPETO',val:61.92,parc:null,cat:'Restaurantes/Delivery'},
+{id:189,bill:'fev',date:'27/jan',desc:'PANIFICADORA REAL',val:33.21,parc:null,cat:'Supermercado'},
+{id:190,bill:'fev',date:'28/jan',desc:'MP*ROUTEHAMBURGU',val:102.98,parc:null,cat:'Restaurantes/Delivery'},
+{id:191,bill:'fev',date:'29/jan',desc:'AMANDA BRIGADEIRO DOCE',val:38.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:192,bill:'fev',date:'30/jan',desc:'DONNA VITORIA RESTAURA',val:326.12,parc:null,cat:'Restaurantes/Delivery'},
+{id:193,bill:'fev',date:'30/jan',desc:'RESTAURANTE KI',val:33.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:194,bill:'fev',date:'30/jan',desc:'DOCE SABOR',val:59.50,parc:null,cat:'Restaurantes/Delivery'},
+{id:195,bill:'fev',date:'31/jan',desc:'UNIAO AGROPET',val:88.00,parc:null,cat:'Pet/Animais'},
+{id:196,bill:'fev',date:'31/jan',desc:'TAMANHO FAMILIA',val:35.95,parc:null,cat:'Supermercado'},
+{id:197,bill:'fev',date:'31/jan',desc:'ACAITERIA E SORVETERIA',val:52.39,parc:null,cat:'Restaurantes/Delivery'},
+{id:198,bill:'fev',date:'31/jan',desc:'SUPERMERCADO TAMANHO F',val:41.99,parc:null,cat:'Supermercado'},
+{id:199,bill:'fev',date:'01/fev',desc:'RAYSSA DE SOUZA MOREIR',val:81.00,parc:null,cat:'Beleza/Estética'},
+{id:200,bill:'fev',date:'01/fev',desc:'ATACADAO DOS PREC',val:57.15,parc:null,cat:'Supermercado'},
+
+// ---- MARÇO 2026 ----
+{id:300,bill:'mar',date:'02/jun',desc:'AMAZON BR',val:146.20,parc:'9/10',cat:'Tecnologia/Assinaturas'},
+{id:301,bill:'mar',date:'11/ago',desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'7/10',cat:'Construção/Reforma'},
+{id:302,bill:'mar',date:'14/ago',desc:'CENTAURO CE139',val:106.24,parc:'7/8',cat:'Lazer/Esportes'},
+{id:303,bill:'mar',date:'03/set',desc:'MERCADO*GROWTHSUPPLEM',val:95.78,parc:'6/6',cat:'Saúde/Farmácia'},
+{id:304,bill:'mar',date:'15/set',desc:'ATACADAO DAS TINTAS',val:715.14,parc:'6/7',cat:'Construção/Reforma'},
+{id:305,bill:'mar',date:'17/set',desc:'CASA DO VIDRACEIRO',val:888.59,parc:'6/6',cat:'Construção/Reforma'},
+{id:306,bill:'mar',date:'15/out',desc:'MARMOTINS',val:1586.06,parc:'5/7',cat:'Construção/Reforma'},
+{id:307,bill:'mar',date:'05/nov',desc:'NOVA PPA PALMAS',val:337.66,parc:'4/6',cat:'Construção/Reforma'},
+{id:308,bill:'mar',date:'17/nov',desc:'PNEUSTORE CPX',val:175.56,parc:'4/8',cat:'Transporte/Auto'},
+{id:309,bill:'mar',date:'12/dez',desc:'GRUPO OLX 21A660',val:80.66,parc:'3/3',cat:'Compras Online'},
+{id:310,bill:'mar',date:'12/dez',desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'3/6',cat:'Compras Online'},
+{id:311,bill:'mar',date:'22/dez',desc:'MERCADOLIVRE*MERCADOLI',val:50.73,parc:'3/6',cat:'Compras Online'},
+{id:312,bill:'mar',date:'27/dez',desc:'R7 PNEUS',val:112.50,parc:'3/4',cat:'Transporte/Auto'},
+{id:313,bill:'mar',date:'06/jan',desc:'PALACIO DAS BATERIAS E AU',val:198.95,parc:'2/6',cat:'Transporte/Auto'},
+{id:314,bill:'mar',date:'07/jan',desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'2/8',cat:'Casa/Doméstico'},
+{id:315,bill:'mar',date:'14/jan',desc:'SOL COMERCIO E SERVICOS',val:242.63,parc:'2/3',cat:'Construção/Reforma'},
+{id:316,bill:'mar',date:'15/jan',desc:'NORTE PISCINAS',val:167.33,parc:'2/3',cat:'Casa/Doméstico'},
+{id:317,bill:'mar',date:'16/jan',desc:'GRUPO OLX 9CB36F',val:44.36,parc:'2/3',cat:'Compras Online'},
+{id:318,bill:'mar',date:'17/jan',desc:'MEURER TINTAS E SERVIO',val:89.93,parc:'2/3',cat:'Construção/Reforma'},
+{id:319,bill:'mar',date:'19/jan',desc:'EC*GROWTHSUPPLEM',val:75.65,parc:'2/6',cat:'Saúde/Farmácia'},
+{id:320,bill:'mar',date:'20/jan',desc:'FTD EDUCACAO',val:303.33,parc:'2/6',cat:'Educação'},
+{id:321,bill:'mar',date:'21/jan',desc:'SESC TOCANTINS',val:113.33,parc:'2/3',cat:'Lazer/Esportes'},
+{id:322,bill:'mar',date:'24/jan',desc:'MERCADO*MERCADOLIVRE',val:59.99,parc:'2/3',cat:'Compras Online'},
+{id:323,bill:'mar',date:'02/fev',desc:'AMANDA BRIGADEIRO DOCE',val:115.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:324,bill:'mar',date:'02/fev',desc:'DOCE SABOR',val:108.74,parc:null,cat:'Restaurantes/Delivery'},
+{id:325,bill:'mar',date:'02/fev',desc:'DTALIA DELIVERY PALMAS',val:481.80,parc:null,cat:'Restaurantes/Delivery'},
+{id:326,bill:'mar',date:'02/fev',desc:'NOVO POINT DO ESP',val:40.64,parc:null,cat:'Restaurantes/Delivery'},
+{id:327,bill:'mar',date:'02/fev',desc:'MP*VITORIAGEEK',val:72.00,parc:'1/2',cat:'Tecnologia/Assinaturas'},
+{id:328,bill:'mar',date:'04/fev',desc:'Anuidade - parcela',val:79.16,parc:null,cat:'Serviços Financeiros'},
+{id:329,bill:'mar',date:'06/fev',desc:'ATACADAO DOS PREC',val:74.43,parc:null,cat:'Supermercado'},
+{id:330,bill:'mar',date:'06/fev',desc:'MAYSA BESERRA DA SILVA',val:70.50,parc:null,cat:'Beleza/Estética'},
+{id:331,bill:'mar',date:'07/fev',desc:'GIGANTE',val:145.83,parc:null,cat:'Supermercado'},
+{id:332,bill:'mar',date:'07/fev',desc:'JIM.COM ALICE FINN CELIDO',val:896.17,parc:'1/3',cat:'Beleza/Estética'},
+{id:333,bill:'mar',date:'08/fev',desc:'ACAI.COM 303',val:41.94,parc:null,cat:'Restaurantes/Delivery'},
+{id:334,bill:'mar',date:'09/fev',desc:'FORTE FARMA',val:24.99,parc:null,cat:'Saúde/Farmácia'},
+{id:335,bill:'mar',date:'09/fev',desc:'AMANDA BRIGADEIRO DOCE',val:23.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:336,bill:'mar',date:'10/fev',desc:'ATACADAO DOS PREC',val:41.63,parc:null,cat:'Supermercado'},
+{id:337,bill:'mar',date:'11/fev',desc:'ATACADAO DOS PREC',val:55.18,parc:null,cat:'Supermercado'},
+{id:338,bill:'mar',date:'11/fev',desc:'DROGASIL 2660',val:47.56,parc:'1/3',cat:'Saúde/Farmácia'},
+{id:339,bill:'mar',date:'12/fev',desc:'NEOFOCACCIA',val:75.50,parc:null,cat:'Restaurantes/Delivery'},
+{id:340,bill:'mar',date:'13/fev',desc:'TOKIO MARINE*AUTO07D10',val:212.77,parc:null,cat:'Transporte/Auto'},
+{id:341,bill:'mar',date:'13/fev',desc:'JADYMON_CARDS',val:66.50,parc:null,cat:'Beleza/Estética'},
+{id:342,bill:'mar',date:'13/fev',desc:'DL*STARLINK BRAZIL',val:315.00,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:343,bill:'mar',date:'13/fev',desc:'IOF - OPENAI CHATGPT',val:3.62,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:344,bill:'mar',date:'13/fev',desc:'OPENAI*CHATGPT SUBSCR',val:103.34,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:345,bill:'mar',date:'13/fev',desc:'ROSILEIA GAMA DA',val:115.00,parc:'1/2',cat:'Beleza/Estética'},
+{id:346,bill:'mar',date:'13/fev',desc:'HAVAN PALMAS',val:100.99,parc:'1/10',cat:'Vestuário/Moda'},
+{id:347,bill:'mar',date:'14/fev',desc:'RESTAURANTE ECOLOGICO',val:262.37,parc:null,cat:'Restaurantes/Delivery'},
+{id:348,bill:'mar',date:'15/fev',desc:'FRANGO DOURADO',val:179.30,parc:null,cat:'Restaurantes/Delivery'},
+{id:349,bill:'mar',date:'15/fev',desc:'PIPES EMPREENDIMENTOS',val:25.00,parc:null,cat:'Outros'},
+{id:350,bill:'mar',date:'15/fev',desc:'ATLANTIC',val:215.60,parc:null,cat:'Restaurantes/Delivery'},
+{id:351,bill:'mar',date:'15/fev',desc:'M CONVENIENCIA',val:18.00,parc:null,cat:'Supermercado'},
+{id:352,bill:'mar',date:'15/fev',desc:'POSTO CACIQUE 60',val:205.11,parc:null,cat:'Transporte/Auto'},
+{id:353,bill:'mar',date:'15/fev',desc:'CONVENIENCIA BOIADEIRO',val:41.00,parc:null,cat:'Supermercado'},
+{id:354,bill:'mar',date:'15/fev',desc:'POSTO SAO FRANCIS',val:206.28,parc:null,cat:'Transporte/Auto'},
+{id:355,bill:'mar',date:'15/fev',desc:'GRANBOLOS BOLOS E SOBR',val:23.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:356,bill:'mar',date:'15/fev',desc:'REDE DITO',val:203.04,parc:null,cat:'Outros'},
+{id:357,bill:'mar',date:'15/fev',desc:'POSTO CENTRO',val:255.06,parc:null,cat:'Transporte/Auto'},
+{id:358,bill:'mar',date:'16/fev',desc:'MAGDA RAQUEL DE OLIVEI',val:100.00,parc:null,cat:'Beleza/Estética'},
+{id:359,bill:'mar',date:'16/fev',desc:'BAR E RESTAURANTE PE',val:525.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:360,bill:'mar',date:'17/fev',desc:'BARRA VENTO BGK',val:213.40,parc:null,cat:'Restaurantes/Delivery'},
+{id:361,bill:'mar',date:'17/fev',desc:'VILLA DOS POETAS',val:451.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:362,bill:'mar',date:'18/fev',desc:'REST MANGA ROSA',val:355.30,parc:null,cat:'Restaurantes/Delivery'},
+{id:363,bill:'mar',date:'18/fev',desc:'JIM.COM*TRABALHA BRASIL',val:316.00,parc:null,cat:'Beleza/Estética'},
+{id:364,bill:'mar',date:'19/fev',desc:'LUZIA LOPES DOS SANT',val:366.00,parc:null,cat:'Beleza/Estética'},
+{id:365,bill:'mar',date:'19/fev',desc:'ATLANTIC',val:287.10,parc:null,cat:'Restaurantes/Delivery'},
+{id:366,bill:'mar',date:'19/fev',desc:'L DE SOUSA FONTENELE L',val:126.50,parc:null,cat:'Outros'},
+{id:367,bill:'mar',date:'19/fev',desc:'DL*GOOGLE GOOGLE',val:9.99,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:368,bill:'mar',date:'20/fev',desc:'RESTAURANTE BRASA DO M',val:244.20,parc:null,cat:'Restaurantes/Delivery'},
+{id:369,bill:'mar',date:'20/fev',desc:'LGM DE OLIVEIRA LTDA',val:92.00,parc:null,cat:'Outros'},
+{id:370,bill:'mar',date:'20/fev',desc:'VILLA DOS POETAS',val:324.50,parc:null,cat:'Restaurantes/Delivery'},
+{id:371,bill:'mar',date:'20/fev',desc:'LGM DE OLIVEIRA LTDA',val:5.00,parc:null,cat:'Outros'},
+{id:372,bill:'mar',date:'20/fev',desc:'BARRA GRANDE COME',val:214.51,parc:null,cat:'Restaurantes/Delivery'},
+{id:373,bill:'mar',date:'21/fev',desc:'POSTO MINAS GERAIS',val:250.06,parc:null,cat:'Transporte/Auto'},
+{id:374,bill:'mar',date:'21/fev',desc:'POSTO ALIANCA COLINAS',val:193.00,parc:null,cat:'Transporte/Auto'},
+{id:375,bill:'mar',date:'21/fev',desc:'POSTO SAO LUIS',val:215.00,parc:null,cat:'Transporte/Auto'},
+{id:376,bill:'mar',date:'21/fev',desc:'PIPES EMPREENDIMENTOS',val:25.00,parc:null,cat:'Outros'},
+{id:377,bill:'mar',date:'21/fev',desc:'ZP*FRANCISC 29166',val:108.00,parc:null,cat:'Outros'},
+{id:378,bill:'mar',date:'21/fev',desc:'M CONVENIENCIA',val:18.00,parc:null,cat:'Supermercado'},
+{id:379,bill:'mar',date:'21/fev',desc:'MP*POINTDOSPETTO',val:93.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:380,bill:'mar',date:'21/fev',desc:'MATEUS SUPERMERCA',val:3.99,parc:null,cat:'Supermercado'},
+{id:381,bill:'mar',date:'21/fev',desc:'PACHECO PETRO LTD',val:209.87,parc:null,cat:'Transporte/Auto'},
+{id:382,bill:'mar',date:'21/fev',desc:'MATEUS SUPERMERCA',val:91.49,parc:null,cat:'Supermercado'},
+{id:383,bill:'mar',date:'21/fev',desc:'MATEUS SUPERMERCA',val:10.98,parc:null,cat:'Supermercado'},
+{id:384,bill:'mar',date:'21/fev',desc:'CHURRASCARIA BOI NA BRASA',val:124.70,parc:null,cat:'Restaurantes/Delivery'},
+{id:385,bill:'mar',date:'23/fev',desc:'BRASIL RURAL',val:32.00,parc:null,cat:'Outros'},
+{id:386,bill:'mar',date:'23/fev',desc:'CASA DA LAVOURA',val:12.50,parc:null,cat:'Outros'},
+{id:387,bill:'mar',date:'23/fev',desc:'EMPORIUN NATURAL',val:105.70,parc:null,cat:'Supermercado'},
+{id:388,bill:'mar',date:'24/fev',desc:'ELIAS MATERIAIS',val:41.89,parc:null,cat:'Construção/Reforma'},
+{id:389,bill:'mar',date:'24/fev',desc:'CHURRASCARIA PAUL',val:30.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:390,bill:'mar',date:'25/fev',desc:'INSTITUTO BRUNO FARIAS',val:866.68,parc:'1/3',cat:'Educação'},
+{id:391,bill:'mar',date:'27/fev',desc:'DONNA VITORIA RESTAURA',val:254.36,parc:null,cat:'Restaurantes/Delivery'},
+{id:392,bill:'mar',date:'28/fev',desc:'PANIFICADORA REAL',val:56.51,parc:null,cat:'Supermercado'},
+{id:393,bill:'mar',date:'28/fev',desc:'ATACADAO DOS PREC',val:280.40,parc:null,cat:'Supermercado'},
+{id:394,bill:'mar',date:'28/fev',desc:'DMV LTDA',val:201.00,parc:null,cat:'Outros'},
+
+// ---- ABRIL 2026 ----
+{id:400,bill:'abr',date:'02/jun',desc:'AMAZON BR',val:146.20,parc:'10/10',cat:'Tecnologia/Assinaturas'},
+{id:401,bill:'abr',date:'11/ago',desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'8/10',cat:'Construção/Reforma'},
+{id:402,bill:'abr',date:'14/ago',desc:'CENTAURO CE139',val:106.24,parc:'8/8',cat:'Lazer/Esportes'},
+{id:403,bill:'abr',date:'15/set',desc:'ATACADAO DAS TINTAS',val:715.14,parc:'7/7',cat:'Construção/Reforma'},
+{id:404,bill:'abr',date:'15/out',desc:'MARMOTINS',val:1586.06,parc:'6/7',cat:'Construção/Reforma'},
+{id:405,bill:'abr',date:'05/nov',desc:'NOVA PPA PALMAS',val:337.66,parc:'5/6',cat:'Construção/Reforma'},
+{id:406,bill:'abr',date:'17/nov',desc:'PNEUSTORE CPX',val:175.56,parc:'5/8',cat:'Transporte/Auto'},
+{id:407,bill:'abr',date:'12/dez',desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'4/6',cat:'Compras Online'},
+{id:408,bill:'abr',date:'22/dez',desc:'MERCADOLIVRE*MERCADOLI',val:50.73,parc:'4/6',cat:'Compras Online'},
+{id:409,bill:'abr',date:'27/dez',desc:'R7 PNEUS',val:112.50,parc:'4/4',cat:'Transporte/Auto'},
+{id:410,bill:'abr',date:'06/jan',desc:'PALACIO DAS BATERIAS E AU',val:198.95,parc:'3/6',cat:'Transporte/Auto'},
+{id:411,bill:'abr',date:'07/jan',desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'3/8',cat:'Casa/Doméstico'},
+{id:412,bill:'abr',date:'14/jan',desc:'SOL COMERCIO E SERVICOS',val:242.63,parc:'3/3',cat:'Construção/Reforma'},
+{id:413,bill:'abr',date:'15/jan',desc:'NORTE PISCINAS',val:167.33,parc:'3/3',cat:'Casa/Doméstico'},
+{id:414,bill:'abr',date:'16/jan',desc:'GRUPO OLX 9CB36F',val:44.36,parc:'3/3',cat:'Compras Online'},
+{id:415,bill:'abr',date:'17/jan',desc:'MEURER TINTAS E SERVIO',val:89.93,parc:'3/3',cat:'Construção/Reforma'},
+{id:416,bill:'abr',date:'19/jan',desc:'EC*GROWTHSUPPLEM',val:75.65,parc:'3/6',cat:'Saúde/Farmácia'},
+{id:417,bill:'abr',date:'20/jan',desc:'FTD EDUCACAO',val:303.33,parc:'3/6',cat:'Educação'},
+{id:418,bill:'abr',date:'21/jan',desc:'SESC TOCANTINS',val:113.33,parc:'3/3',cat:'Lazer/Esportes'},
+{id:419,bill:'abr',date:'24/jan',desc:'MERCADO*MERCADOLIVRE',val:59.99,parc:'3/3',cat:'Compras Online'},
+{id:420,bill:'abr',date:'02/fev',desc:'MP*VITORIAGEEK',val:72.00,parc:'2/2',cat:'Tecnologia/Assinaturas'},
+{id:421,bill:'abr',date:'07/fev',desc:'JIM.COM ALICE FINN CELIDO',val:896.15,parc:'2/3',cat:'Beleza/Estética'},
+{id:422,bill:'abr',date:'11/fev',desc:'DROGASIL 2660',val:47.54,parc:'2/3',cat:'Saúde/Farmácia'},
+{id:423,bill:'abr',date:'13/fev',desc:'HAVAN PALMAS',val:100.99,parc:'2/10',cat:'Vestuário/Moda'},
+{id:424,bill:'abr',date:'13/fev',desc:'ROSILEIA GAMA DA',val:115.00,parc:'2/2',cat:'Beleza/Estética'},
+{id:425,bill:'abr',date:'25/fev',desc:'INSTITUTO BRUNO FARIAS',val:866.66,parc:'2/3',cat:'Educação'},
+{id:426,bill:'abr',date:'04/mar',desc:'Anuidade - parcela',val:79.16,parc:null,cat:'Serviços Financeiros'},
+{id:427,bill:'abr',date:'05/mar',desc:'SUPERMERCADO TAMANHO F',val:82.98,parc:null,cat:'Supermercado'},
+{id:428,bill:'abr',date:'06/mar',desc:'Refinanciamento Fatura',val:6502.06,parc:'1/2',cat:'Serviços Financeiros'},
+{id:429,bill:'abr',date:'08/mar',desc:'HAVAN PALMAS',val:59.98,parc:'1/5',cat:'Vestuário/Moda'},
+{id:430,bill:'abr',date:'09/mar',desc:'UBER*PENDING',val:16.18,parc:null,cat:'Transporte/Auto'},
+{id:431,bill:'abr',date:'09/mar',desc:'MERCADOLIVRE*MERCADOLI',val:69.54,parc:null,cat:'Compras Online'},
+{id:432,bill:'abr',date:'09/mar',desc:'DL*UBERRIDES',val:19.22,parc:null,cat:'Transporte/Auto'},
+{id:433,bill:'abr',date:'09/mar',desc:'MERCADOLIVRE*MERCADOLI',val:37.25,parc:'1/3',cat:'Compras Online'},
+{id:434,bill:'abr',date:'09/mar',desc:'R7 PNEUS',val:170.00,parc:'1/2',cat:'Transporte/Auto'},
+{id:435,bill:'abr',date:'11/mar',desc:'PETZ PALMAS',val:82.99,parc:null,cat:'Pet/Animais'},
+{id:436,bill:'abr',date:'13/mar',desc:'SESC TOCANTINS',val:74.00,parc:null,cat:'Lazer/Esportes'},
+{id:437,bill:'abr',date:'13/mar',desc:'TOKIO MARINE*AUTO08D10',val:212.77,parc:null,cat:'Transporte/Auto'},
+{id:438,bill:'abr',date:'13/mar',desc:'SUPERMERCADO TAMANHO F',val:41.39,parc:null,cat:'Supermercado'},
+{id:439,bill:'abr',date:'13/mar',desc:'IOF - OPENAI CHATGPT',val:3.64,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:440,bill:'abr',date:'13/mar',desc:'ATACADAO DOS PREC',val:79.24,parc:null,cat:'Supermercado'},
+{id:441,bill:'abr',date:'13/mar',desc:'AUTO POSTO LEAL E',val:294.84,parc:null,cat:'Transporte/Auto'},
+{id:442,bill:'abr',date:'13/mar',desc:'SESC TOCANTINS',val:111.00,parc:null,cat:'Lazer/Esportes'},
+{id:443,bill:'abr',date:'13/mar',desc:'OPENAI*CHATGPT SUBSCR',val:104.09,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:444,bill:'abr',date:'14/mar',desc:'JARDIM BUFFET',val:133.08,parc:null,cat:'Restaurantes/Delivery'},
+{id:445,bill:'abr',date:'14/mar',desc:'MUNDO ELETRICO',val:148.84,parc:null,cat:'Casa/Doméstico'},
+{id:446,bill:'abr',date:'14/mar',desc:'MERCADO*MERCADOLIVRE',val:66.24,parc:null,cat:'Compras Online'},
+{id:447,bill:'abr',date:'15/mar',desc:'ATACADAO DOS PREC',val:28.34,parc:null,cat:'Supermercado'},
+{id:448,bill:'abr',date:'15/mar',desc:'ACAITERIA E SORVE',val:51.63,parc:null,cat:'Restaurantes/Delivery'},
+{id:449,bill:'abr',date:'16/mar',desc:'JIM.COM* WDILEIA',val:120.00,parc:null,cat:'Beleza/Estética'},
+{id:450,bill:'abr',date:'16/mar',desc:'UBER*PENDING',val:14.88,parc:null,cat:'Transporte/Auto'},
+{id:451,bill:'abr',date:'16/mar',desc:'PALACIO DAS BATERIAS E AU',val:146.75,parc:'1/4',cat:'Transporte/Auto'},
+{id:452,bill:'abr',date:'17/mar',desc:'SUPERMERCADO IDEAL',val:21.98,parc:null,cat:'Supermercado'},
+{id:453,bill:'abr',date:'17/mar',desc:'ATACADAO DOS PREC',val:16.84,parc:null,cat:'Supermercado'},
+{id:454,bill:'abr',date:'17/mar',desc:'ATACADAO DOS PREC',val:105.91,parc:null,cat:'Supermercado'},
+{id:455,bill:'abr',date:'18/mar',desc:'SALAMANCA CAPITAL',val:125.11,parc:null,cat:'Restaurantes/Delivery'},
+{id:456,bill:'abr',date:'18/mar',desc:'MP*GLANACYDEANAG',val:20.00,parc:null,cat:'Beleza/Estética'},
+{id:457,bill:'abr',date:'18/mar',desc:'FORTE FARMA',val:22.50,parc:null,cat:'Saúde/Farmácia'},
+{id:458,bill:'abr',date:'18/mar',desc:'MP*BIOPEIXES123',val:119.50,parc:null,cat:'Supermercado'},
+{id:459,bill:'abr',date:'18/mar',desc:'SALAMANCA CAPITAL',val:200.04,parc:null,cat:'Restaurantes/Delivery'},
+{id:460,bill:'abr',date:'18/mar',desc:'EC*SARALANE CASTRO SOUS',val:240.00,parc:null,cat:'Beleza/Estética'},
+{id:461,bill:'abr',date:'18/mar',desc:'ATACADAO DOS PREC',val:55.09,parc:null,cat:'Supermercado'},
+{id:462,bill:'abr',date:'19/mar',desc:'TAMANHO FAMILIA',val:57.49,parc:null,cat:'Supermercado'},
+{id:463,bill:'abr',date:'19/mar',desc:'PALMAS MOTO',val:40.00,parc:null,cat:'Transporte/Auto'},
+{id:464,bill:'abr',date:'19/mar',desc:'DL*GOOGLE GOOGLE',val:9.99,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:465,bill:'abr',date:'20/mar',desc:'CONVENIENCIA',val:62.08,parc:null,cat:'Supermercado'},
+{id:466,bill:'abr',date:'20/mar',desc:'ATACADAO DOS PREC',val:52.66,parc:null,cat:'Supermercado'},
+{id:467,bill:'abr',date:'20/mar',desc:'CONVENIENCIA',val:22.00,parc:null,cat:'Supermercado'},
+{id:468,bill:'abr',date:'20/mar',desc:'MP*WIFILAVAJATO',val:70.00,parc:null,cat:'Casa/Doméstico'},
+{id:469,bill:'abr',date:'20/mar',desc:'IOF - CLAUDE.AI',val:3.89,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:470,bill:'abr',date:'20/mar',desc:'CLAUDE.AI SUBSCRIPTION',val:111.21,parc:null,cat:'Tecnologia/Assinaturas'},
+{id:471,bill:'abr',date:'21/mar',desc:'SUBWAY',val:72.53,parc:null,cat:'Restaurantes/Delivery'},
+{id:472,bill:'abr',date:'22/mar',desc:'AMANDA BRIGADEIRO DOCE',val:87.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:473,bill:'abr',date:'22/mar',desc:'REI DA MELANCIA',val:30.00,parc:null,cat:'Supermercado'},
+{id:474,bill:'abr',date:'22/mar',desc:'ATACADAO DOS PREC',val:60.31,parc:null,cat:'Supermercado'},
+{id:475,bill:'abr',date:'22/mar',desc:'VBS HORTALICAS',val:49.00,parc:null,cat:'Supermercado'},
+{id:476,bill:'abr',date:'22/mar',desc:'BANCA DA REGIANE',val:20.00,parc:null,cat:'Supermercado'},
+{id:477,bill:'abr',date:'23/mar',desc:'NOVA PAPELARIA',val:24.22,parc:null,cat:'Outros'},
+{id:478,bill:'abr',date:'23/mar',desc:'PALMAS MOTO',val:20.00,parc:null,cat:'Transporte/Auto'},
+{id:479,bill:'abr',date:'23/mar',desc:'FERRAGISTA ALVES E SCOR',val:33.64,parc:null,cat:'Construção/Reforma'},
+{id:480,bill:'abr',date:'23/mar',desc:'RAIA DROGASIL SA',val:39.90,parc:null,cat:'Saúde/Farmácia'},
+{id:481,bill:'abr',date:'24/mar',desc:'GRUPO OLX 41A899',val:52.63,parc:'1/3',cat:'Compras Online'},
+{id:482,bill:'abr',date:'26/mar',desc:'EMPORIO QUARTETTO',val:47.98,parc:null,cat:'Restaurantes/Delivery'},
+{id:483,bill:'abr',date:'26/mar',desc:'MAYSA BESERRA DA SILVA',val:70.50,parc:null,cat:'Beleza/Estética'},
+{id:484,bill:'abr',date:'27/mar',desc:'NOVO POINT DO ESPETO',val:46.75,parc:null,cat:'Restaurantes/Delivery'},
+{id:485,bill:'abr',date:'27/mar',desc:'DOCE SABOR',val:69.60,parc:null,cat:'Restaurantes/Delivery'},
+{id:486,bill:'abr',date:'28/mar',desc:'ACAITERIA E SORVE',val:57.70,parc:null,cat:'Restaurantes/Delivery'},
+{id:487,bill:'abr',date:'29/mar',desc:'MERCADOLIVRE*MERCADOLI',val:249.70,parc:null,cat:'Compras Online'},
+{id:488,bill:'abr',date:'29/mar',desc:'SUPERMERCADO TAMANHO F',val:22.68,parc:null,cat:'Supermercado'},
+{id:489,bill:'abr',date:'29/mar',desc:'TAMANHO FAMILIA',val:41.53,parc:null,cat:'Supermercado'},
+{id:490,bill:'abr',date:'29/mar',desc:'MERCADOLIVRE*MERCADOLI',val:23.97,parc:null,cat:'Compras Online'},
+{id:491,bill:'abr',date:'29/mar',desc:'MERCADOLIVRE*2PRODUTOS',val:28.01,parc:'1/2',cat:'Compras Online'},
+{id:492,bill:'abr',date:'29/mar',desc:'MERCADOLIVRE*2PRODUTOS',val:51.72,parc:'1/2',cat:'Compras Online'},
+{id:493,bill:'abr',date:'31/mar',desc:'BOKA LANCHES',val:14.00,parc:null,cat:'Restaurantes/Delivery'},
+{id:494,bill:'abr',date:'31/mar',desc:'BOKA LANCHES',val:64.80,parc:null,cat:'Restaurantes/Delivery'},
+{id:495,bill:'abr',date:'31/mar',desc:'UBER*PENDING',val:9.18,parc:null,cat:'Transporte/Auto'},
+{id:496,bill:'abr',date:'31/mar',desc:'NOVO POINT DO ESPETO',val:43.81,parc:null,cat:'Restaurantes/Delivery'},
+{id:497,bill:'abr',date:'31/mar',desc:'PALACIO DAS BATERIAS E AU',val:147.70,parc:'1/6',cat:'Transporte/Auto'},
+];
+
+// Carrega dados salvos antes de aplicar overrides
+loadData();
+
+// Apply user overrides
+T = T.map(t=>({...t, cat: userCats[t.id] || t.cat}));
+
+// ============================================================
+// FUTURE INSTALLMENTS
+// ============================================================
+const PROJ = [
+  {m:'mai', label:'Maio/26', items:[
+    {desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'9/10',ref:false},
+    {desc:'MARMOTINS',val:1586.06,parc:'7/7',ref:false},
+    {desc:'NOVA PPA PALMAS',val:337.66,parc:'6/6',ref:false},
+    {desc:'PNEUSTORE CPX',val:175.56,parc:'6/8',ref:false},
+    {desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'5/6',ref:false},
+    {desc:'MERCADOLIVRE*MERCADOLI',val:50.73,parc:'5/6',ref:false},
+    {desc:'PALACIO DAS BATERIAS (jan)',val:198.95,parc:'4/6',ref:false},
+    {desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'4/8',ref:false},
+    {desc:'EC*GROWTHSUPPLEM',val:75.65,parc:'4/6',ref:false},
+    {desc:'FTD EDUCACAO',val:303.33,parc:'4/6',ref:false},
+    {desc:'JIM.COM ALICE FINN CELIDO',val:896.15,parc:'3/3',ref:false},
+    {desc:'DROGASIL 2660',val:47.54,parc:'3/3',ref:false},
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'3/10',ref:false},
+    {desc:'INSTITUTO BRUNO FARIAS',val:866.66,parc:'3/3',ref:false},
+    {desc:'Refinanciamento Fatura ⚠️',val:6502.06,parc:'2/2',ref:true},
+    {desc:'HAVAN PALMAS (mar)',val:59.98,parc:'2/5',ref:false},
+    {desc:'R7 PNEUS',val:170.00,parc:'2/2',ref:false},
+    {desc:'MERCADOLIVRE*MERCADOLI (mar)',val:37.25,parc:'2/3',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/16)',val:146.75,parc:'2/4',ref:false},
+    {desc:'GRUPO OLX 41A899',val:52.63,parc:'2/3',ref:false},
+    {desc:'MERCADOLIVRE*2PRODUTOS',val:28.01,parc:'2/2',ref:false},
+    {desc:'MERCADOLIVRE*2PRODUTOS',val:51.72,parc:'2/2',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/31)',val:147.70,parc:'2/6',ref:false},
+  ]},
+  {m:'jun', label:'Junho/26', items:[
+    {desc:'MEURER TINTAS E SERVIO',val:1106.98,parc:'10/10',ref:false},
+    {desc:'PNEUSTORE CPX',val:175.56,parc:'7/8',ref:false},
+    {desc:'MERCADO*MERCADOLIVRE',val:46.65,parc:'6/6',ref:false},
+    {desc:'MERCADOLIVRE*MERCADOLI',val:50.73,parc:'6/6',ref:false},
+    {desc:'PALACIO DAS BATERIAS (jan)',val:198.95,parc:'5/6',ref:false},
+    {desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'5/8',ref:false},
+    {desc:'EC*GROWTHSUPPLEM',val:75.65,parc:'5/6',ref:false},
+    {desc:'FTD EDUCACAO',val:303.33,parc:'5/6',ref:false},
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'4/10',ref:false},
+    {desc:'HAVAN PALMAS (mar)',val:59.98,parc:'3/5',ref:false},
+    {desc:'MERCADOLIVRE*MERCADOLI (mar)',val:37.25,parc:'3/3',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/16)',val:146.75,parc:'3/4',ref:false},
+    {desc:'GRUPO OLX 41A899',val:52.63,parc:'3/3',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/31)',val:147.70,parc:'3/6',ref:false},
+  ]},
+  {m:'jul', label:'Julho/26', items:[
+    {desc:'PNEUSTORE CPX',val:175.56,parc:'8/8',ref:false},
+    {desc:'PALACIO DAS BATERIAS (jan)',val:198.95,parc:'6/6',ref:false},
+    {desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'6/8',ref:false},
+    {desc:'EC*GROWTHSUPPLEM',val:75.65,parc:'6/6',ref:false},
+    {desc:'FTD EDUCACAO',val:303.33,parc:'6/6',ref:false},
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'5/10',ref:false},
+    {desc:'HAVAN PALMAS (mar)',val:59.98,parc:'4/5',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/16)',val:146.75,parc:'4/4',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/31)',val:147.70,parc:'4/6',ref:false},
+  ]},
+  {m:'ago', label:'Agosto/26', items:[
+    {desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'7/8',ref:false},
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'6/10',ref:false},
+    {desc:'HAVAN PALMAS (mar)',val:59.98,parc:'5/5',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/31)',val:147.70,parc:'5/6',ref:false},
+  ]},
+  {m:'set', label:'Setembro/26', items:[
+    {desc:'RIQUENA NETO AR CONDICI',val:257.36,parc:'8/8',ref:false},
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'7/10',ref:false},
+    {desc:'PALACIO DAS BATERIAS (mar/31)',val:147.70,parc:'6/6',ref:false},
+  ]},
+  {m:'out', label:'Outubro/26', items:[
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'8/10',ref:false},
+  ]},
+  {m:'nov', label:'Novembro/26', items:[
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'9/10',ref:false},
+  ]},
+  {m:'dez', label:'Dezembro/26', items:[
+    {desc:'HAVAN PALMAS (fev)',val:100.99,parc:'10/10',ref:false},
+  ]},
+];
+
+// ============================================================
+// CHARTS
+// ============================================================
+const BILL_LABELS = ['Jan/26','Fev/26','Mar/26','Abr/26'];
+const BILL_VALS = [11267.95, 13688.98, 18761.71, 19541.00];
+const BILL_COLORS = ['#2e7d32','#f57c00','#c62828','#6a1b9a'];
+
+new Chart(document.getElementById('chartMensal'),{
+  type:'bar',
+  data:{labels:BILL_LABELS,datasets:[{label:'Total Fatura (R$)',data:BILL_VALS,backgroundColor:BILL_COLORS,borderRadius:8,borderSkipped:false}]},
+  options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtBRL(ctx.parsed.y)}}},scales:{y:{ticks:{callback:v=>'R$ '+v.toLocaleString('pt-BR')},grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}
+});
+
+let catChart = null;
+function getCatTotals(bill){
+  const filtered = bill?T.filter(t=>t.bill===bill):T;
+  const map={};
+  CATS.forEach(c=>map[c]=0);
+  filtered.forEach(t=>{if(t.val>0)map[userCats[t.id]||t.cat]=(map[userCats[t.id]||t.cat]||0)+t.val});
+  return map;
+}
+
+function updateCatChart(bill, btn){
+  document.querySelectorAll('.month-filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const map = getCatTotals(bill);
+  const entries = Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const labels = entries.map(([k])=>k.replace('Restaurantes/Delivery','Restaurantes').replace('Tecnologia/Assinaturas','Tech/Assin.').replace('Construção/Reforma','Construção').replace('Transporte/Auto','Transporte').replace('Compras Online','Comp.Online').replace('Serviços Financeiros','Serv.Fin.'));
+  const vals = entries.map(([,v])=>v);
+  const colors = entries.map(([k])=>CAT_COLORS[CATS.indexOf(k)%CAT_COLORS.length]);
+  if(catChart){catChart.data.labels=labels;catChart.data.datasets[0].data=vals;catChart.data.datasets[0].backgroundColor=colors;catChart.update();return;}
+  catChart=new Chart(document.getElementById('chartCat'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12,padding:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtBRL(ctx.parsed)}`}}}}
+  });
+}
+updateCatChart('all',null);
+
+// ============================================================
+// CATEGORY BARS
+// ============================================================
+function renderCatBars(){
+  const map = getCatTotals(null);
+  const total = Object.values(map).reduce((a,b)=>a+b,0);
+  const entries = Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const max = entries[0][1];
+  let html='';
+  entries.forEach(([k,v],i)=>{
+    const pct=(v/total*100).toFixed(1);
+    const w=(v/max*100).toFixed(1);
+    const col=CAT_COLORS[CATS.indexOf(k)%CAT_COLORS.length];
+    html+=`<div class="cat-row"><span class="cat-name"><span class="legend-dot" style="background:${col}"></span>${k}</span><div style="flex:1;margin:0 12px"><div class="progress-bar"><div class="progress-fill" style="width:${w}%;background:${col}"></div></div></div><span class="cat-val">${fmtBRL(v)}</span><span class="cat-pct">${pct}%</span></div>`;
+    if(i===0){document.getElementById('topCatVal').textContent=fmtBRL(v);document.getElementById('topCatName').textContent=k;}
+  });
+  document.getElementById('catBars').innerHTML=html;
+}
+renderCatBars();
+
+// ============================================================
+// TRANSACTIONS TABLE
+// ============================================================
+function renderTable(){
+  const mes=document.getElementById('filtMes').value;
+  const cat=document.getElementById('filtCat').value;
+  const busca=document.getElementById('filtBusca').value.toLowerCase();
+  const rows=T.filter(t=>t.val>0&&(!mes||t.bill===mes)&&(!cat||(userCats[t.id]||t.cat)===cat)&&(!busca||t.desc.toLowerCase().includes(busca)));
+  const total=rows.reduce((s,t)=>s+t.val,0);
+  document.getElementById('countLbl').textContent=`${rows.length} lançamentos`;
+  document.getElementById('totalFiltrado').textContent=fmtBRL(total);
+  const tbody=document.getElementById('tbodyLanc');
+  const allCats = [...CATS, ...customCats];
+  tbody.innerHTML=rows.map(t=>{
+    const curCat = userCats[t.id]||t.cat;
+    const curObs = userObs[t.id]||'';
+    const opts = allCats.map(c=>`<option value="${c}"${curCat===c?' selected':''}>${c}</option>`).join('');
+    return `<tr>
+      <td><span class="badge ${t.bill}">${t.bill.toUpperCase()}</span></td>
+      <td style="white-space:nowrap;color:#888">${t.date}</td>
+      <td>${t.desc}</td>
+      <td>${t.parc?`<span class="badge parc">${t.parc}</span>`:''}</td>
+      <td class="txt-right vr">${fmtBRL(t.val)}</td>
+      <td>
+        <select class="cat-sel" onchange="changecat(${t.id},this.value)">${opts}<option value="__nova__">➕ Nova categoria...</option></select>
+      </td>
+      <td><input class="obs-inp" type="text" placeholder="anotação..." value="${curObs.replace(/"/g,'&quot;')}" onchange="changeobs(${t.id},this.value)" title="Adicionar observação a este lançamento"></td>
+    </tr>`;
+  }).join('');
+}
+
+function changecat(id, cat){
+  if(cat==='__nova__'){
+    const nova = prompt('Nome da nova categoria:','');
+    if(!nova||!nova.trim()){renderTable();return;}
+    const nome = nova.trim();
+    if(!CATS.includes(nome)&&!customCats.includes(nome)){
+      customCats.push(nome);
+      CAT_COLORS.push('#'+Math.floor(Math.random()*0xbbbbbb+0x222222).toString(16).padStart(6,'0'));
+      // atualiza filtro de categorias
+      const filtCatEl=document.getElementById('filtCat');
+      const o=document.createElement('option');o.value=nome;o.textContent=nome;filtCatEl.appendChild(o);
+    }
+    cat = nome;
+  }
+  userCats[id]=cat;
+  T=T.map(t=>t.id===id?{...t,cat}:t);
+  saveData();
+  renderCatBars();
+  const activeBillBtn = document.querySelector('.month-filter-btn.active');
+  const activeBill = activeBillBtn ? (activeBillBtn.dataset.bill||'all') : 'all';
+  updateCatChart(activeBill, activeBillBtn);
+  renderTable();
+}
+
+function changeobs(id, obs){
+  userObs[id] = obs.trim();
+  saveData();
+}
+
+// Populate category filter (inclui categorias customizadas já carregadas)
+const filtCat=document.getElementById('filtCat');
+[...CATS,...customCats].forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;filtCat.appendChild(o);});
+renderTable();
+
+// ============================================================
+// PROJECTION
+// ============================================================
+function projTotal(items){return items.reduce((s,i)=>s+i.val,0);}
+function projTotalSemRef(items){return items.filter(i=>!i.ref).reduce((s,i)=>s+i.val,0);}
+
+function renderProjSummary(){
+  const tbody=document.getElementById('tbodyProj');
+  let gTotal=0, gTotalSem=0;
+  tbody.innerHTML=PROJ.map(p=>{
+    const t=projTotal(p.items);
+    const s=projTotalSemRef(p.items);
+    gTotal+=t; gTotalSem+=s;
+    const hasRef=p.items.some(i=>i.ref);
+    return `<tr><td class="proj-month">${p.label}</td><td class="txt-right vr">${fmtBRL(t)}</td><td class="txt-right" style="color:${hasRef?'#888':'#333'}">${fmtBRL(s)}</td></tr>`;
+  }).join('');
+  document.getElementById('projTotal').textContent=fmtBRL(gTotal);
+  document.getElementById('projTotalSem').textContent=fmtBRL(gTotalSem);
+}
+renderProjSummary();
+
+function renderProjDetail(){
+  const m=document.getElementById('projMonthSel').value;
+  const proj=PROJ.find(p=>p.m===m);
+  if(!proj)return;
+  const tbody=document.getElementById('tbodyProjDetail');
+  tbody.innerHTML=proj.items.map(i=>`<tr style="${i.ref?'background:#fff8e1':''}""><td>${i.desc}${i.ref?' 🔴':''}</td><td><span class="badge parc">${i.parc}</span></td><td class="txt-right vr">${fmtBRL(i.val)}</td></tr>`).join('');
+  document.getElementById('projDetailTotal').textContent=fmtBRL(projTotal(proj.items));
+}
+renderProjDetail();
+
+// Projection chart
+const projLabels=PROJ.map(p=>p.label.split('/')[0]);
+const projVals=PROJ.map(p=>projTotal(p.items));
+const projValsCore=PROJ.map(p=>projTotalSemRef(p.items));
+new Chart(document.getElementById('chartParcelas'),{
+  type:'bar',
+  data:{
+    labels:projLabels,
+    datasets:[
+      {label:'Com Refinanciamento',data:projVals,backgroundColor:'#ef9a9a',borderRadius:6,borderSkipped:false},
+      {label:'Sem Refinanciamento',data:projValsCore,backgroundColor:'#2e7d32',borderRadius:6,borderSkipped:false}
+    ]
+  },
+  options:{responsive:true,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtBRL(ctx.parsed.y)}`}}},scales:{y:{ticks:{callback:v=>'R$ '+v.toLocaleString('pt-BR')},grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}
+});
+
+// ============================================================
+// RANKING FULL (Análise tab)
+// ============================================================
+function renderRankingFull(){
+  const map=getCatTotals(null);
+  const total=Object.values(map).reduce((a,b)=>a+b,0);
+  const entries=Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const max=entries[0][1];
+  let html='<table style="width:100%"><thead><tr><th style="width:30%">Categoria</th><th style="width:40%">Participação</th><th class="txt-right">Total</th><th class="txt-right">% do Total</th></tr></thead><tbody>';
+  entries.forEach(([k,v],i)=>{
+    const pct=(v/total*100).toFixed(1);
+    const w=(v/max*100).toFixed(1);
+    const col=CAT_COLORS[CATS.indexOf(k)%CAT_COLORS.length];
+    html+=`<tr><td><span class="legend-dot" style="background:${col}"></span>${k}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${w}%;background:${col}"></div></div></td><td class="txt-right vr">${fmtBRL(v)}</td><td class="txt-right" style="color:#888">${pct}%</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('rankingFull').innerHTML=html;
+}
+renderRankingFull();
+
+// ============================================================
+// TAB SWITCH
+// ============================================================
+function showTab(name){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ============================================================
+// IMPORTADOR CSV — Estado global
+// ============================================================
+let csvRows = [];        // linhas parseadas (array de arrays)
+let csvHeaders = [];     // cabeçalhos detectados
+let csvSep = ';';        // separador detectado
+let csvMapping = {};     // { data: idx, desc: idx, val: idx, parc: idx }
+let csvChecked = {};     // { rowIndex: bool } — linhas marcadas para importar
+
+// ---- Abrir / fechar modal ----
+function openCSVImport(){
+  document.getElementById('csvModal').classList.add('open');
+}
+function closeCSVImport(){
+  document.getElementById('csvModal').classList.remove('open');
+}
+function resetCSVModal(){
+  csvRows=[]; csvHeaders=[]; csvMapping={}; csvChecked={};
+  document.getElementById('csvPasteArea').value='';
+  document.getElementById('csvFileInput').value='';
+  document.getElementById('csvStep2').style.display='none';
+  document.getElementById('btnConfirmImport').disabled=true;
+  setStatus('','');
+}
+
+// ---- Drag & drop ----
+function dzOver(e){e.preventDefault();document.getElementById('dropZone').classList.add('dragging');}
+function dzLeave(e){document.getElementById('dropZone').classList.remove('dragging');}
+function dzDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragging');
+  const f=e.dataTransfer.files[0];
+  if(f) handleCSVFile(f);
+}
+
+// ---- Leitura do arquivo ----
+function handleCSVFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>parseCSVText(e.target.result);
+  // Tenta UTF-8; se falhar com latin, relê
+  reader.readAsText(file,'UTF-8');
+}
+
+// ---- Status visual ----
+function setStatus(type, msg){
+  const el=document.getElementById('parseStatus');
+  el.className='parse-status'+(type?' '+type:'');
+  el.innerHTML=msg;
+}
+
+// ---- Detecção de separador ----
+function detectSep(text){
+  const sample=text.split('\n').slice(0,5).join('\n');
+  const semi=(sample.match(/;/g)||[]).length;
+  const comma=(sample.match(/,/g)||[]).length;
+  const tab=(sample.match(/\t/g)||[]).length;
+  if(tab>semi&&tab>comma) return '\t';
+  if(semi>=comma) return ';';
+  return ',';
+}
+
+// ---- Parser CSV robusto (lida com campos entre aspas) ----
+function parseCSVLine(line, sep){
+  const result=[];
+  let cur='', inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===sep&&!inQ){result.push(cur.trim());cur='';}
+    else{cur+=c;}
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+// ---- Normalizar valor monetário BR/EN ----
+function parseValor(str){
+  if(!str) return null;
+  let s=str.replace(/[R$\s]/g,'').trim();
+  // Remove créditos marcados com C ou CR
+  if(/[cC][rR]?$/.test(s)) return null; // crédito → ignora
+  s=s.replace(/[^0-9,.\-]/g,'');
+  if(!s) return null;
+  // Formato BR: 1.234,56
+  if(/\d{1,3}(\.\d{3})*(,\d+)?$/.test(s)){
+    s=s.replace(/\./g,'').replace(',','.');
+  }
+  // Formato EN: 1,234.56
+  else if(/\d{1,3}(,\d{3})*(\.\d+)?$/.test(s)){
+    s=s.replace(/,/g,'');
+  }
+  const v=parseFloat(s);
+  return isNaN(v)?null:Math.abs(v);
+}
+
+// ---- Detectar índice de coluna por heurística ----
+function guessMapping(headers, rows){
+  const map={data:-1,desc:-1,val:-1,parc:-1};
+  const hLower=headers.map(h=>h.toLowerCase());
+
+  // Por nome de cabeçalho
+  const matchers={
+    data: [/data/,/date/,/dt/,/vencim/,/lan[cç]/],
+    desc: [/descri/,/histor/,/estabele/,/comerci/,/loja/,/nome/,/detail/],
+    val:  [/valor/,/value/,/amount/,/total/,/debito/,/débito/,/import/,/r\$/],
+    parc: [/parcela/,/parc/,/install/],
+  };
+
+  Object.entries(matchers).forEach(([field,pats])=>{
+    if(map[field]>=0) return;
+    hLower.forEach((h,i)=>{
+      if(map[field]>=0) return;
+      if(pats.some(p=>p.test(h))) map[field]=i;
+    });
+  });
+
+  // Fallback por conteúdo das primeiras linhas
+  const sample=rows.slice(0,10);
+  if(map.data<0){
+    headers.forEach((_,i)=>{
+      if(map.data>=0) return;
+      const hits=sample.filter(r=>/\d{2}[\/\-]\d{2}/.test(r[i]||'')).length;
+      if(hits>=3) map.data=i;
+    });
+  }
+  if(map.val<0){
+    headers.forEach((_,i)=>{
+      if(map.val>=0) return;
+      const hits=sample.filter(r=>parseValor(r[i])!==null&&parseValor(r[i])>0).length;
+      if(hits>=3) map.val=i;
+    });
+  }
+  if(map.desc<0){
+    // Coluna com strings mais longas que não seja data nem valor
+    let bestLen=-1, bestIdx=-1;
+    headers.forEach((_,i)=>{
+      if(i===map.data||i===map.val||i===map.parc) return;
+      const avg=sample.reduce((s,r)=>s+(r[i]||'').length,0)/Math.max(sample.length,1);
+      if(avg>bestLen){bestLen=avg;bestIdx=i;}
+    });
+    if(bestIdx>=0) map.desc=bestIdx;
+  }
+  return map;
+}
+
+// ---- Parsing principal ----
+function parseCSVText(text){
+  if(!text||!text.trim()){setStatus('err','Arquivo vazio ou não legível.');return;}
+
+  csvSep=detectSep(text);
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+
+  if(lines.length<2){setStatus('err','CSV com menos de 2 linhas. Verifique o arquivo.');return;}
+
+  // Detecta se a primeira linha é cabeçalho
+  const firstCells=parseCSVLine(lines[0],csvSep);
+  const hasHeader=firstCells.some(c=>/[a-zA-ZáéíóúÁÉÍÓÚçÇ]{3,}/.test(c)&&!/^\d/.test(c));
+
+  let dataStart=0;
+  if(hasHeader){
+    csvHeaders=firstCells.map(c=>c.replace(/"/g,''));
+    dataStart=1;
+  } else {
+    csvHeaders=firstCells.map((_,i)=>'Coluna '+(i+1));
+  }
+
+  csvRows=lines.slice(dataStart).map(l=>parseCSVLine(l,csvSep)).filter(r=>r.some(c=>c.trim()));
+
+  if(csvRows.length===0){setStatus('err','Nenhuma linha de dados encontrada após o cabeçalho.');return;}
+
+  csvMapping=guessMapping(csvHeaders,csvRows);
+
+  // Inicializa todas como marcadas
+  csvChecked={};
+  csvRows.forEach((_,i)=>csvChecked[i]=true);
+
+  renderColGrid();
+  renderPreview();
+  document.getElementById('csvStep2').style.display='block';
+  document.getElementById('btnConfirmImport').disabled=false;
+
+  const total=csvRows.filter((_,i)=>getRowVal(i)!==null).length;
+  setStatus('ok',`✅ <strong>${csvRows.length} linhas</strong> detectadas · separador "<code>${csvSep==='	'?'TAB':csvSep}</code>" · <strong>${total} lançamentos</strong> com valor reconhecido. Confira o mapeamento e o preview abaixo.`);
+}
+
+// ---- Renderiza os selects de mapeamento de colunas ----
+function renderColGrid(){
+  const fields=[
+    {key:'data', label:'📅 Data'},
+    {key:'desc', label:'🏪 Descrição'},
+    {key:'val',  label:'💰 Valor'},
+    {key:'parc', label:'🔢 Parcela (opcional)'},
+  ];
+  const opts=csvHeaders.map((h,i)=>`<option value="${i}">${h||'Coluna '+(i+1)}</option>`).join('');
+  const noneOpt='<option value="-1">— não usar —</option>';
+
+  document.getElementById('colGrid').innerHTML=fields.map(f=>`
+    <div class="col-field">
+      <label>${f.label}</label>
+      <select onchange="csvMapping['${f.key}']=parseInt(this.value);renderPreview()">
+        ${f.key==='parc'?noneOpt:''}
+        ${opts}
+      </select>
+    </div>
+  `).join('');
+
+  // Aplica valores detectados
+  fields.forEach((f,fi)=>{
+    const sel=document.getElementById('colGrid').querySelectorAll('select')[fi];
+    sel.value=csvMapping[f.key]??-1;
+  });
+}
+
+// ---- Pega valor de uma linha ----
+function getRowVal(i){
+  const r=csvRows[i];
+  if(!r) return null;
+  return parseValor(r[csvMapping.val]??'');
+}
+
+// ---- Renderiza preview das linhas ----
+function renderPreview(){
+  const wrap=document.getElementById('previewWrap');
+  const {data,desc,val,parc}=csvMapping;
+
+  let validCount=0, totalVal=0, skipped=0;
+
+  let html=`<table><thead><tr>
+    <th style="width:30px"></th>
+    <th>Data</th><th>Descrição</th><th>Parcela</th><th class="txt-right">Valor</th><th>Categoria sugerida</th>
+  </tr></thead><tbody>`;
+
+  csvRows.forEach((r,i)=>{
+    const dVal=data>=0?(r[data]||''):'—';
+    const dDesc=desc>=0?(r[desc]||''):'—';
+    const dParc=parc>=0?(r[parc]||''):null;
+    const v=getRowVal(i);
+    const checked=csvChecked[i]!==false;
+    const skip=v===null||v<=0;
+    if(skip){skipped++;csvChecked[i]=false;}
+    else if(checked){validCount++;totalVal+=v;}
+
+    const catSug=suggestCat(dDesc);
+    const rowClass=skip?'skip':'';
+
+    html+=`<tr class="${rowClass}">
+      <td class="row-toggle"><input type="checkbox" ${checked&&!skip?'checked':''} ${skip?'disabled':''} onchange="toggleRow(${i},this.checked)"></td>
+      <td class="${rowClass}">${dVal}</td>
+      <td class="${rowClass}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${dDesc}">${dDesc}</td>
+      <td class="${rowClass}">${dParc||''}</td>
+      <td class="txt-right ${v?'ok-val':'bad-val'}">${v?fmtBRL(v):(v===null?'<span style="color:#bbb">?</span>':'R$ 0,00')}</td>
+      <td style="font-size:.72rem;color:#666">${catSug}</td>
+    </tr>`;
+  });
+
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+
+  document.getElementById('importSummary').innerHTML=`
+    <div class="imp-card"><div class="imp-num">${validCount}</div><div class="imp-lbl">Lançamentos</div></div>
+    <div class="imp-card"><div class="imp-num">${fmtBRL(totalVal)}</div><div class="imp-lbl">Total da Fatura</div></div>
+    <div class="imp-card"><div class="imp-num" style="color:#888">${skipped}</div><div class="imp-lbl">Ignorados (crédito/vazio)</div></div>
+  `;
+}
+
+function toggleRow(i, checked){
+  csvChecked[i]=checked;
+  // Atualiza resumo sem re-renderizar tudo
+  let validCount=0,totalVal=0;
+  csvRows.forEach((_,idx)=>{
+    if(csvChecked[idx]!==false){
+      const v=getRowVal(idx);
+      if(v&&v>0){validCount++;totalVal+=v;}
+    }
+  });
+  const cards=document.getElementById('importSummary').querySelectorAll('.imp-num');
+  if(cards[0]) cards[0].textContent=validCount;
+  if(cards[1]) cards[1].textContent=fmtBRL(totalVal);
+}
+
+// ---- Sugestão automática de categoria ----
+function suggestCat(desc){
+  const d=(desc||'').toUpperCase();
+  const rules=[
+    ['Construção/Reforma', /MARMOT|MEURER|TINTAS?|VIDRAC|MATERIAI|MADEI|CONSTRU|FERRAG|ELIAS|PPA PALMAS|ARCELOR|PISO/],
+    ['Supermercado',       /ATACADAO|SUPERMERCADO|TAMANHO F|GIGANTE|PANIFICAD|BIOPEIXES|HORTALIC|MELANCIA|SUPERPALMA|SERA GRANDE|MATEUS SUPER|EMPORIUN/],
+    ['Restaurantes/Delivery', /RESTAUR|BURGER|PIZZ|SUBWAY|SUSHII|CHURRASCARIA|LANCHES|BRIGADE|BUFFET|SHAWARMA|REZENHA|ACAI|EMPORIO|SEARA|DONNA|BARRA VENTO|VILLA DOS|MANGA ROSA|BOKA|PETTO|GRILL|POINT DO ESPETO|SALAMANCA|QUARTETTO|MOORANGO|DOM CHURRASCO|BERTORIA|CACHE/],
+    ['Transporte/Auto',    /UBER|99APP|TAXI|POSTO|GASOLINA|COMBUSTIVEL|PNEU|R7 PNEUS|TOKIO MARINE.*AUTO|BORRACHARIA|PALMAS MOTO|PALACIO DAS BATERIAS|PNEUSTORE|AUTO POSTO/],
+    ['Saúde/Farmácia',     /FARMAC|DROGASIL|PAGUE MENOS|RAIA|CLINICA|MEDIC|HOSPITALAR|GROWTHSUPP|DROGARIA|FORTE FARMA/],
+    ['Tecnologia/Assinaturas', /OPENAI|CHATGPT|CLAUDE|GOOGLE|AMAZON BR|AMAZON DIGITAL|NETFLIX|SPOTIFY|APPLE|MICROSOFT|IOF.*OPENAI|IOF.*CLAUDE/],
+    ['Educação',           /ESCOLA|UNIVERSID|FACUL|CURSO|FTD|INSTITUT|ENSINO|COLEGIO|BRUNO FARIA/],
+    ['Casa/Doméstico',     /NORTE PISCINAS|LAVAJET|LAVAJATO|AR CONDICIO|RIQUENA|MUNDO ELETRIC|WIFILAVAJATO/],
+    ['Pet/Animais',        /PET|AGROPET|VETERINAR|PETZ/],
+    ['Beleza/Estética',    /CABELE|ESTETICA|SARALANE|ALVORADA CORTE|ALICE FINN|WDILEIA|GLANACYDE|JIM\.COM|MAYSA BESERRA|ROSILEIA/],
+    ['Lazer/Esportes',     /SESC|CENTAURO|ACADEMIA|TEATRO|CINEMA|KRAV|GYM|FITNESS/],
+    ['Vestuário/Moda',     /HAVAN|RENNER|C&A|ZARA|RIACHUELO|MODA|ROUPA|VESTUARIO/],
+    ['Serviços Financeiros', /ANUIDADE|REFINANCIAMENTO|SEGURO|TARIFA|IOF(?!.*OPENAI)(?!.*CLAUDE)/],
+    ['Compras Online',     /MERCADOLIVRE|MERCADO\*|AMAZON(?!.*DIGITAL)|OLX|SHOPEE|AMERICANAS|MAGALU|ECOMFORCE/],
+  ];
+  for(const [cat,regex] of rules){
+    if(regex.test(d)) return cat;
+  }
+  return 'Outros';
+}
+
+// ---- Confirmar importação ----
+function confirmImport(){
+  const mes=document.getElementById('csvMes').value;
+  const mesLabel=document.getElementById('csvMesLabel').value||mes;
+  const {data,desc,val,parc}=csvMapping;
+
+  const toImport=csvRows.filter((_,i)=>{
+    if(csvChecked[i]===false) return false;
+    const v=getRowVal(i);
+    return v&&v>0;
+  });
+
+  if(toImport.length===0){
+    setStatus('warn','Nenhum lançamento selecionado para importar.');
+    return;
+  }
+
+  // Verifica se já existe este mês no dashboard
+  const existente=T.some(t=>t.bill===mes);
+  if(existente){
+    if(!confirm(`⚠️ Já existem lançamentos do mês "${mesLabel}" no dashboard. Deseja adicionar mesmo assim?`)) return;
+  }
+
+  // Gera IDs únicos (max existente + incremento)
+  let nextId=Math.max(...T.map(t=>t.id),999)+1;
+
+  const novos=toImport.map((r,i)=>{
+    const d=data>=0?(r[data]||''):'';
+    const ds=desc>=0?(r[desc]||'Lançamento'):'Lançamento';
+    const v=getRowVal(csvRows.indexOf(r));
+    const pc=parc>=0?(r[parc]||null):null;
+    const cat=suggestCat(ds);
+    return {id:nextId++, bill:mes, date:d, desc:ds.toUpperCase(), val:v, parc:pc||null, cat};
+  });
+
+  // Acumula
+  T=[...T,...novos];
+
+  // Persiste mapeamento de categorias novo estilo (userCats gerado só para novos ids)
+  // (cat já está em T, não precisa de userCats)
+  saveData();
+
+  // Atualiza navegação: adiciona aba e filtro se mês ainda não existe
+  addMonthToUI(mes, mesLabel);
+
+  // Re-renderiza tudo
+  renderCatBars();
+  updateCatChart('all', document.querySelector('.month-filter-btn[data-bill="all"]'));
+  renderTable();
+  updateSummaryBar();
+
+  setStatus('ok',`🎉 <strong>${novos.length} lançamentos</strong> de <strong>${mesLabel}</strong> importados com sucesso! Total: <strong>${fmtBRL(novos.reduce((s,t)=>s+t.val,0))}</strong>`);
+  document.getElementById('btnConfirmImport').disabled=true;
+
+  // Fecha modal após 1.5s
+  setTimeout(()=>{
+    closeCSVImport();
+    resetCSVModal();
+  },2000);
+}
+
+// ---- Adiciona mês dinamicamente na UI ----
+function addMonthToUI(mes, label){
+  // Aba no nav
+  const nav=document.querySelector('.nav');
+  if(!nav.querySelector(`.tab[data-month="${mes}"]`)){
+    // Não adiciona aba nova (abas são fixas); apenas expande os filtros
+  }
+
+  // Botão de filtro mês nos gráficos de categoria
+  const btnGroup=document.getElementById('catMonthBtns');
+  if(btnGroup&&!btnGroup.querySelector(`[data-bill="${mes}"]`)){
+    const btn=document.createElement('button');
+    btn.className='month-filter-btn';
+    btn.dataset.bill=mes;
+    btn.textContent=label.split('/')[0];
+    btn.onclick=function(){updateCatChart(mes,this);};
+    btnGroup.appendChild(btn);
+  }
+
+  // Opção no filtro de mês da tabela
+  const filtMes=document.getElementById('filtMes');
+  if(filtMes&&!filtMes.querySelector(`option[value="${mes}"]`)){
+    const o=document.createElement('option');
+    o.value=mes;o.textContent=label;
+    filtMes.appendChild(o);
+  }
+}
+
+// ---- Atualiza barra de resumo (cards de mês) ----
+function updateSummaryBar(){
+  const meses=[...new Set(T.map(t=>t.bill))];
+  const bar=document.querySelector('.summary-bar');
+  if(!bar) return;
+
+  const colors=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez','jan27','fev27'];
+  const colorMap={
+    jan:'#2e7d32',fev:'#f57c00',mar:'#c62828',abr:'#6a1b9a',
+    mai:'#01579b',jun:'#004d40',jul:'#bf360c',ago:'#880e4f',
+    set:'#e65100',out:'#37474f',nov:'#558b2f',dez:'#6d4c41',
+    jan27:'#1565c0',fev27:'#4a148c'
+  };
+  const labelMap={
+    jan:'Janeiro 2026',fev:'Fevereiro 2026',mar:'Março 2026',abr:'Abril 2026',
+    mai:'Maio 2026',jun:'Junho 2026',jul:'Julho 2026',ago:'Agosto 2026',
+    set:'Setembro 2026',out:'Outubro 2026',nov:'Novembro 2026',dez:'Dezembro 2026',
+    jan27:'Janeiro 2027',fev27:'Fevereiro 2027'
+  };
+
+  // Só atualiza se houver meses novos além dos 4 originais
+  const originais=['jan','fev','mar','abr'];
+  const novos=meses.filter(m=>!originais.includes(m));
+  if(novos.length===0) return;
+
+  novos.forEach(m=>{
+    if(bar.querySelector(`[data-bill-card="${m}"]`)) return;
+    const tot=T.filter(t=>t.bill===m&&t.val>0).reduce((s,t)=>s+t.val,0);
+    const col=colorMap[m]||'#555';
+    const lbl=labelMap[m]||m.toUpperCase();
+    const card=document.createElement('div');
+    card.className='card';
+    card.dataset.billCard=m;
+    card.style.cssText=`position:relative;overflow:hidden;background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07)`;
+    card.innerHTML=`
+      <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${col};border-radius:12px 0 0 12px"></div>
+      <h3 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:6px">${lbl}</h3>
+      <div class="amount" style="font-size:1.5rem;font-weight:700;color:${col}">${fmtBRL(tot)}</div>
+      <div class="delta" style="font-size:.75rem;color:#aaa;margin-top:4px">Importado via CSV</div>`;
+    bar.appendChild(card);
+  });
+}
+</script>
+</body>
+</html>
