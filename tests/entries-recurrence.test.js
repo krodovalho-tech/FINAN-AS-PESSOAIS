@@ -11,6 +11,7 @@ test('edição preenche data ISO e mantém identidade e dados importados',()=>{
 });
 test('recorrência limita vencimento ao fim de fevereiro e restaura dia original em março',()=>{
  assert.equal(recurringDate('2026-01-31',2026,1),'2026-02-28');
+ assert.equal(recurringDate(new Date('2026-01-31T00:00:00Z'),2026,1),'2026-02-28');
  assert.equal(recurringDate('2024-01-31',2024,1),'2024-02-29');
  assert.equal(recurringDate('2026-01-31',2026,2),'2026-03-31');
 });
