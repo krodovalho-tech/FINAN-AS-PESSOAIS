@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+const hash=x=>createHash('sha256').update(x).digest('hex');
+const text=(await readFile(new URL('../api/assistant.js',import.meta.url),'utf8')).replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.assistantSql(...args);").replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;");
+const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`);
+async function call(action,body,token){const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(data){this.data=data;return this;}};await handler({method:'POST',query:{action},body,headers:{authorization:token?`Bearer ${token}`:undefined}},res);return res;}
+test('troca exige prova, aceita uma vez e rejeita replay',async()=>{
+ const code='A'.repeat(43),verifier='b'.repeat(64);let unused=true;
+ globalThis.assistantSql=async(strings,...v)=>({rows:strings.join('').startsWith('UPDATE')&&unused&&v[1]===hash(code)&&v[2]===hash(verifier)?(unused=false,[{id:1}]):[]});
+ assert.equal((await call('exchange',{code,verifier:'c'.repeat(64)})).statusCode,401);
+ const valid=await call('exchange',{code,verifier});assert.equal(valid.statusCode,200);assert.match(valid.data.token,/^[A-Za-z0-9_-]{43}$/);
+ assert.equal((await call('exchange',{code,verifier})).statusCode,401);
+});
+test('lançamento repetido conserva o registro e impede reuso com conteúdo diferente',async()=>{
+ const entry={id:9,type:'expense',category:'Lanches',description:'Almoço',amount:'24.90',date:'2026-10-07'};
+ globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:strings.join('').startsWith('INSERT')?[]:[entry]});
+ const body={...entry,amount:24.9,request_id:'almoco_20261007'};
+ const duplicate=await call('record',body,'D'.repeat(43));assert.equal(duplicate.statusCode,200);assert.equal(duplicate.data.duplicate,true);
+ assert.equal((await call('record',{...body,amount:25},'D'.repeat(43))).statusCode,409);
+});
+test('sem token ou valores inválidos não há confirmação de gravação',async()=>{
+ assert.equal((await call('record',{})).statusCode,401);
+ globalThis.assistantSql=async()=>({rows:[{id:1}]});
+ const invalid=await call('record',{type:'expense',amount:-1},'D'.repeat(43));assert.equal(invalid.statusCode,400);assert.equal(invalid.data.saved,undefined);
+});
