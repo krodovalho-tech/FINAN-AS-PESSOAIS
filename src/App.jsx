@@ -1,3 +1,5 @@
+import { api, request } from "./api.js";
+import { normalizeImport } from "./import.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlusCircle, Trash2, TrendingUp, TrendingDown, DollarSign, BarChart3,
@@ -11,7 +13,7 @@ import {
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = [
-  "Moradia","Alimentação","Transporte","Saúde","Educação",
+  "Moradia","Alimentação","Alimentação — supermercado","Alimentação — bares, restaurantes e lanches","Rancho — ração de animais","Empréstimos concedidos","Locações — manutenção","Doações","Água, energia e gás","Telefone e internet","Transporte","Saúde","Educação",
   "Lazer","Vestuário","Investimentos","Impostos","Cartão de Crédito","Outros"
 ];
 const INCOME_CATEGORIES = [
@@ -62,7 +64,7 @@ function parseOFX(content) {
     const date = dtRaw.length>=8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : today;
     const amount = parseFloat(get(b,"TRNAMT")||"0");
     const desc = (get(b,"MEMO")||get(b,"NAME")||get(b,"FITID")||"Sem descrição").replace(/&amp;/g,"&");
-    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:autoCategory(desc), recurring:false });
+    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:autoCategory(desc), recurring:false, source_id:get(b,"FITID"), bank:`${get(content,"ORG") || get(content,"BANKID") || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
   }
   return results;
 }
@@ -109,44 +111,6 @@ function parseCSV(content) {
 }
 
 // ─── API CLIENT ─────────────────────────────────────────────────────────────
-const BASE = "/api";
-const api = {
-  async getEntries(month, year) {
-    const r = await fetch(`${BASE}/entries?month=${month}&year=${year}`);
-    return r.json();
-  },
-  async getAllEntries() {
-    const r = await fetch(`${BASE}/entries?all=true`);
-    return r.json();
-  },
-  async addEntry(e) {
-    const r = await fetch(`${BASE}/entries`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(e) });
-    return r.json();
-  },
-  async updateEntry(id, e) {
-    const r = await fetch(`${BASE}/entries?id=${id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(e) });
-    return r.json();
-  },
-  async deleteEntry(id) {
-    await fetch(`${BASE}/entries?id=${id}`, { method:"DELETE" });
-  },
-  async bulkInsert(entries) {
-    const r = await fetch(`${BASE}/entries`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ entries }) });
-    return r.json();
-  },
-  async getBudgets() {
-    const r = await fetch(`${BASE}/budgets`);
-    return r.json();
-  },
-  async setBudget(category, monthly_limit) {
-    const r = await fetch(`${BASE}/budgets`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ category, monthly_limit }) });
-    return r.json();
-  },
-  async deleteBudget(category) {
-    await fetch(`${BASE}/budgets?category=${encodeURIComponent(category)}`, { method:"DELETE" });
-  },
-};
-
 // ─── STYLE HELPERS ──────────────────────────────────────────────────────────
 const S = {
   input: { width:"100%", padding:"0.65rem 0.85rem", background:"#0f0c0a", border:"1px solid #3d342a", borderRadius:"8px", color:"#e8d8c0", fontSize:"0.9rem", boxSizing:"border-box", marginTop:"0.3rem", fontFamily:"'Source Sans 3', sans-serif" },
@@ -228,7 +192,7 @@ function EntryModal({ show, onClose, onSave, initial }) {
         <div>
           <label style={S.label}>Categoria</label>
           <select value={form.category} onChange={e=>set("category",e.target.value)} style={S.input}>
-            {(form.type==="expense"?EXPENSE_CATEGORIES:INCOME_CATEGORIES).map(c=><option key={c}>{c}</option>)}
+            {[...new Set([form.category,...(form.type==="expense"?EXPENSE_CATEGORIES:INCOME_CATEGORIES)])].map(c=><option key={c}>{c}</option>)}
           </select>
         </div>
         <div>
@@ -307,7 +271,7 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
             <span style={{ color:"#8a7a6a" }}>{e.date}</span>
             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }} title={e.description}>{e.description}</span>
             <select value={e.category} onChange={ev=>onChange(i,"category",ev.target.value)} style={{ ...S.input,marginTop:0,padding:"0.25rem 0.4rem",fontSize:"0.75rem" }}>
-              {ALL_CATEGORIES.map(c=><option key={c}>{c}</option>)}
+              {[...new Set([...ALL_CATEGORIES,...items.map(e=>e.category)])].map(c=><option key={c}>{c}</option>)}
             </select>
             <span style={{ color:e.type==="income"?"#7ec87e":"#c87e7e",textAlign:"right",fontWeight:"600" }}>
               {e.type==="income"?"+":"-"}{fmt(e.amount)}
@@ -326,13 +290,17 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────────
-export default function App() {
+function Finance() {
   const now = new Date();
   const [month, setMonth]           = useState(now.getMonth());
   const [year, setYear]             = useState(now.getFullYear());
   const [entries, setEntries]       = useState([]);
   const [allEntries, setAllEntries] = useState([]);
   const [budgets, setBudgets]       = useState({});
+  const [syncError, setSyncError] = useState("");
+  const [lastSync, setLastSync] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState("dashboard");
   const [search, setSearch]         = useState("");
@@ -346,22 +314,25 @@ export default function App() {
   const [showBudgets, setShowBudgets] = useState(false);
   const [importItems, setImportItems] = useState(null);
   const toastTimer = useRef(null);
+  const monthRequest = useRef(0);
 
   // ── Data loading ──
   const loadMonth = useCallback(async () => {
+    const sequence = ++monthRequest.current;
     setLoading(true);
     try {
       const data = await api.getEntries(month, year);
-      setEntries(Array.isArray(data) ? data : []);
-    } catch { setEntries([]); }
-    setLoading(false);
+      if (sequence !== monthRequest.current) return;
+      setEntries(data); setSyncError(""); setLastSync(new Date());
+    } catch (err) { if (sequence === monthRequest.current) setSyncError(err.message); }
+    if (sequence === monthRequest.current) setLoading(false);
   }, [month, year]);
 
   const loadAll = useCallback(async () => {
     try {
       const data = await api.getAllEntries();
       setAllEntries(Array.isArray(data) ? data : []);
-    } catch {}
+    } catch (err) { setSyncError(err.message); }
   }, []);
 
   const loadBudgets = useCallback(async () => {
@@ -370,11 +341,19 @@ export default function App() {
       const map = {};
       if (Array.isArray(data)) data.forEach(b => { map[b.category] = parseFloat(b.monthly_limit); });
       setBudgets(map);
-    } catch {}
+    } catch (err) { setSyncError(err.message); }
   }, []);
 
   useEffect(() => { loadMonth(); }, [loadMonth]);
   useEffect(() => { loadAll(); loadBudgets(); }, [loadAll, loadBudgets]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden && !savingRef.current) { loadMonth(); loadAll(); loadBudgets(); } };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
+  }, [loadMonth, loadAll, loadBudgets]);
 
   // ── Toast helper ──
   const showToast = (msg, undo=null) => {
@@ -460,7 +439,7 @@ export default function App() {
 
   // ── CRUD handlers ──
   const handleSave = async (form) => {
-    setShowAdd(false); setEditEntry(null);
+
     if (form.id) {
       const updated = await api.updateEntry(form.id, form);
       setEntries(prev=>prev.map(e=>e.id===form.id?updated:e));
@@ -472,15 +451,16 @@ export default function App() {
       await loadAll();
       showToast("Lançamento registrado ✓");
     }
+    setShowAdd(false); setEditEntry(null);
   };
 
   const handleDelete = async (entry) => {
+    await api.deleteEntry(entry.id);
     setDelConfirm(null);
     setEntries(prev=>prev.filter(e=>e.id!==entry.id));
     setAllEntries(prev=>prev.filter(e=>e.id!==entry.id));
-    await api.deleteEntry(entry.id);
     showToast("Lançamento removido", async () => {
-      const restored = await api.addEntry({ type:entry.type,category:entry.category,description:entry.description,amount:entry.amount,date:entry.date,recurring:entry.recurring });
+      const restored = await api.addEntry(entry);
       await loadMonth(); await loadAll();
       showToast("Lançamento restaurado ✓");
     });
@@ -508,8 +488,8 @@ export default function App() {
       else {
         try {
           const data = JSON.parse(content);
-          if (Array.isArray(data)) items = data;
-        } catch { showToast("Arquivo inválido"); return; }
+          items = normalizeImport(data);
+        } catch (err) { showToast(err.message); return; }
       }
       if (!items.length) { showToast("Nenhuma transação encontrada no arquivo"); return; }
       setImportItems(items);
@@ -520,10 +500,18 @@ export default function App() {
 
   const handleImportConfirm = async () => {
     if (!importItems?.length) return;
-    await api.bulkInsert(importItems);
+    const result = await api.bulkInsert(importItems);
     await loadMonth(); await loadAll();
-    showToast(`${importItems.length} lançamentos importados ✓`);
+    showToast(`${result.inserted} lançamentos salvos; ${result.skipped} já existentes ✓`);
     setImportItems(null);
+  };
+
+  const saveSafely = async (operation) => {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    try { await operation(); setSyncError(""); setLastSync(new Date()); }
+    catch (err) { setSyncError(err.message); showToast(err.message); }
+    finally { savingRef.current = false; setSaving(false); }
   };
 
   // ── Export JSON ──
@@ -547,7 +535,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0f0c0a", color:"#e8d8c0", fontFamily:"'Source Sans 3', sans-serif" }}>
-      <Toast msg={toast} onUndo={undoPayload}/>
+      <Toast msg={toast} onUndo={undoPayload ? ()=>saveSafely(undoPayload) : null}/>
 
       {/* ── HEADER ── */}
       <div style={{ background:"#1a1612", borderBottom:"1px solid #3d342a", padding:"1.2rem 1.5rem" }}>
@@ -579,6 +567,12 @@ export default function App() {
         </div>
       </div>
 
+      <div role="status" style={{ maxWidth:1100, margin:"0 auto", padding:"0.8rem 1.5rem", color:syncError?"#c87e7e":"#7ec87e", fontSize:"0.85rem" }}>
+        {saving ? "Salvando no banco online…" : syncError || (lastSync ? `Sincronizado às ${lastSync.toLocaleTimeString("pt-BR")}` : "Conectando ao banco online…")}
+        <button style={{...S.btn(false),marginLeft:12}} onClick={()=>{loadMonth();loadAll();loadBudgets();}}>Atualizar</button>
+        {syncError && <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{ await request("setup",{method:"POST"}); await loadMonth(); await loadAll(); await loadBudgets(); })}>Preparar banco</button>}
+        <button style={{...S.btn(false),marginLeft:8}} onClick={()=>request("session",{method:"DELETE"}).then(()=>location.reload()).catch(err=>setSyncError(err.message))}>Sair</button>
+      </div>
       {/* ── NAV ── */}
       <div style={{ background:"#1a1612", borderBottom:"1px solid #3d342a" }}>
         <div style={{ maxWidth:"1100px", margin:"0 auto", display:"flex" }}>
@@ -799,10 +793,10 @@ export default function App() {
       </div>
 
       {/* ── MODALS ── */}
-      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={handleSave} initial={null}/>
-      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={handleSave} initial={editEntry}/>
+      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null}/>
+      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry}/>
 
-      <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={handleBudgetSave} onDelete={handleBudgetDelete} budgets={budgets}/>
+      <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={(cat,amt)=>saveSafely(()=>handleBudgetSave(cat,amt))} onDelete={cat=>saveSafely(()=>handleBudgetDelete(cat))} budgets={budgets}/>
 
       {/* Delete confirm */}
       <Modal show={!!delConfirm} onClose={()=>setDelConfirm(null)} maxWidth={380}>
@@ -810,13 +804,38 @@ export default function App() {
         <p style={{ fontSize:"0.85rem",color:"#8a7a6a",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#e8d8c0" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
         <div style={{ display:"flex",gap:"0.6rem" }}>
           <button onClick={()=>setDelConfirm(null)} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-          <button onClick={()=>handleDelete(delConfirm)} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>Excluir</button>
+          <button onClick={()=>saveSafely(()=>handleDelete(delConfirm))} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>Excluir</button>
         </div>
       </Modal>
 
       {/* Import preview */}
-      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} onConfirm={handleImportConfirm}
+      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} onConfirm={()=>saveSafely(handleImportConfirm)}
         onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v}:e))}/>
     </div>
   );
+}
+
+
+
+export default function App() {
+  const [ready,setReady] = useState(false);
+  const [password,setPassword] = useState("");
+  const [error,setError] = useState("");
+  const [busy,setBusy] = useState(true);
+  useEffect(()=>{request("session").then(()=>setReady(true)).catch(err=>setError(err.message)).finally(()=>setBusy(false));},[]);
+  const login = async e => {
+    e.preventDefault(); setBusy(true); setError("");
+    try { await request("session",{method:"POST",body:JSON.stringify({password})}); setPassword(""); setReady(true); }
+    catch(err) { setError(err.message); } finally { setBusy(false); }
+  };
+  if (ready) return <Finance/>;
+  return <main style={{minHeight:"100vh",background:"#0f0c0a",color:"#e8d8c0",display:"grid",placeItems:"center",padding:20,boxSizing:"border-box"}}>
+    <form onSubmit={login} style={{...S.card,width:"100%",maxWidth:380}}>
+      <h1>Controle Financeiro</h1><p>Entre com a mesma senha no computador e no celular.</p>
+      <label htmlFor="password">Senha de acesso</label>
+      <input id="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} style={S.input} required/>
+      {error && <p role="alert">{error}</p>}
+      <button disabled={busy} style={{...S.btn(true),marginTop:16}}>{busy?"Conectando…":"Entrar"}</button>
+    </form>
+  </main>;
 }
