@@ -1,7 +1,7 @@
 import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
-const CALLBACK = 'https://assistente-financeiro-kleber.airy-basil-1213.chatgpt.site/connected';
+const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
 export default async function handler(req,res) {
