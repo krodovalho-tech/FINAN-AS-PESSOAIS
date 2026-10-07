@@ -464,15 +464,25 @@ function Finance() {
   };
 
   const handleDelete = async (entry) => {
+    ++monthRequest.current;
     await api.deleteEntry(entry.id);
     setDelConfirm(null);
     setEntries(prev=>prev.filter(e=>e.id!==entry.id));
     setAllEntries(prev=>prev.filter(e=>e.id!==entry.id));
+    await loadMonth(); await loadAll();
     showToast("Lançamento removido", async () => {
       const restored = await api.addEntry(entry);
       await loadMonth(); await loadAll();
       showToast("Lançamento restaurado ✓");
     });
+  };
+
+  const handleStopRecurring = async (entry) => {
+    ++monthRequest.current;
+    const result=await api.stopRecurring(entry.id);
+    setDelConfirm(null);
+    await loadMonth(); await loadAll();
+    showToast(`Recorrência encerrada; ${result.removed} previsões removidas. Pagamento original preservado.`);
   };
 
   const handleBudgetSave = async (cat, amt) => {
@@ -795,7 +805,7 @@ function Finance() {
                       <button onClick={()=>setEditEntry(e)} title="Editar" aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#c8a97e",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Pencil size={13}/>
                       </button>
-                      <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"0.2rem" }}>
+                      <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Trash2 size={13}/>
                       </button>
                     </div>
@@ -830,9 +840,10 @@ function Finance() {
       <Modal show={!!delConfirm} onClose={()=>setDelConfirm(null)} maxWidth={380}>
         <h2 style={{ margin:"0 0 0.8rem",fontSize:"1rem",color:"#c87e7e" }}>Confirmar exclusão</h2>
         <p style={{ fontSize:"0.85rem",color:"#8a7a6a",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#e8d8c0" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
+        {(delConfirm?.recurring || delConfirm?.bank==="Recorrência") && <div style={{border:"1px solid #c8a97e",padding:12,borderRadius:8,marginBottom:16}}><p style={{fontSize:14,marginBottom:12}}>Se este gasto não deve se repetir, encerre a recorrência. Isso remove as previsões geradas dessa série e mantém o pagamento original.</p><button style={S.btn(true)} disabled={saving} onClick={()=>saveSafely(()=>handleStopRecurring(delConfirm))}>Encerrar recorrência e remover previsões</button></div>}
         <div style={{ display:"flex",gap:"0.6rem" }}>
           <button onClick={()=>setDelConfirm(null)} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-          <button onClick={()=>saveSafely(()=>handleDelete(delConfirm))} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>Excluir</button>
+          <button disabled={saving} onClick={()=>saveSafely(()=>handleDelete(delConfirm))} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>{saving?"Salvando…":delConfirm?.bank==="Recorrência"?"Excluir só este mês":"Excluir lançamento"}</button>
         </div>
       </Modal>
 

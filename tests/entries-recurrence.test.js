@@ -55,3 +55,22 @@ test('aplicação mensal normaliza datas do banco, conta repetidos e rejeita mê
  assert.deepEqual((await call({year:2026,month:10})).data,{inserted:1,skipped:0});
  assert.deepEqual((await call({year:2026,month:10})).data,{inserted:0,skipped:1});
 });
+test('encerrar pela cópia identifica a série original e protege pagamentos confirmados',async()=>{
+ const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
+ .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.stopSql(...args);")
+ .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
+ const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+ let count=0;globalThis.stopSql=async(strings,...values)=>{
+ count++;const query=strings.join('');
+ if(query.startsWith('SELECT'))return {rows:[{id:88,bank:'Recorrência',source_id:'42:2026-11-01'}]};
+ assert.equal(values[0],42);assert.equal(values[1],'42:%');
+ assert.match(query,/UPDATE entries SET recurring=FALSE/);
+ assert.match(query,/bank='Recorrência'/);assert.match(query,/confirmed IS NOT TRUE/);
+ return {rows:[{stopped:1,removed:3}]};
+ };
+ const call=async(id)=>{const res={setHeader(){},status(n){this.code=n;return this;},json(data){this.data=data;return this;}};await handler({method:'POST',body:{action:'stop',id}},res);return res;};
+ assert.equal((await call('invalid')).code,400);assert.equal(count,0);
+ const stopped=await call(88);assert.equal(stopped.code,200);assert.deepEqual(stopped.data,{ok:true,stopped:1,removed:3});
+ globalThis.stopSql=async()=>{throw new Error('unavailable');};assert.equal((await call(88)).code,500);
+});
