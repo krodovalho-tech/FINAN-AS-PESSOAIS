@@ -1,5 +1,6 @@
 import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
+import { validEntry } from '../lib/entry-validation.js';
 
 
 
@@ -48,7 +49,7 @@ export default async function handler(req, res) {
     // ── CREATE ────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
       const { type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation } = req.body;
-      if (!type || !category || !description || !amount || !date) {
+      if (!validEntry(req.body)) {
         return res.status(400).json({ error: 'Campos obrigatórios: type, category, description, amount, date' });
       }
       const { rows } = await sql`
@@ -62,8 +63,9 @@ export default async function handler(req, res) {
     // ── UPDATE ────────────────────────────────────────────────────────────
     if (req.method === 'PUT') {
       const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'id obrigatório' });
-      const { type, category, description, amount, date, recurring, notes } = req.body;
+      if (!/^[1-9]\d*$/.test(String(id || ''))) return res.status(400).json({ error: 'Identificador inválido' });
+      const { type, category, description, amount, date, recurring, notes } = req.body || {};
+      if (!validEntry(req.body)) return res.status(400).json({ error: 'Confira descrição, categoria, valor positivo e data válida.' });
       const { rows } = await sql`
         UPDATE entries
         SET type=${type}, category=${category}, description=${description},
@@ -78,7 +80,7 @@ export default async function handler(req, res) {
     // ── DELETE ────────────────────────────────────────────────────────────
     if (req.method === 'DELETE') {
       const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'id obrigatório' });
+      if (!/^[1-9]\d*$/.test(String(id || ''))) return res.status(400).json({ error: 'Identificador inválido' });
       await sql`DELETE FROM entries WHERE id=${parseInt(id, 10)}`;
       return res.status(200).json({ ok: true });
     }

@@ -1,4 +1,5 @@
 import { api, request } from "./api.js";
+import { normalizeEntryForm } from "./entry-form.js";
 import { normalizeImport } from "./import.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -172,12 +173,12 @@ const PieLabel = ({ cx,cy,midAngle,outerRadius,name,percent }) => {
 };
 
 // ─── ENTRY FORM MODAL ────────────────────────────────────────────────────────
-function EntryModal({ show, onClose, onSave, initial }) {
+function EntryModal({ show, onClose, onSave, initial, saving }) {
   const isEdit = !!initial?.id;
-  const [form, setForm] = useState(initial || { type:"expense",category:"Alimentação",description:"",amount:"",date:today,recurring:false });
-  useEffect(() => { setForm(initial || { type:"expense",category:"Alimentação",description:"",amount:"",date:today,recurring:false }); },[initial,show]);
+  const [form, setForm] = useState(normalizeEntryForm(initial,today));
+  useEffect(() => { setForm(normalizeEntryForm(initial,today)); },[initial,show]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  const valid = form.description.trim() && form.amount && form.date;
+  const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && !saving;
   return (
     <Modal show={show} onClose={onClose}>
       <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#c8a97e",textTransform:"uppercase",letterSpacing:"0.07em" }}>
@@ -210,11 +211,11 @@ function EntryModal({ show, onClose, onSave, initial }) {
           </div>
         </div>
         <label style={{ display:"flex",alignItems:"center",gap:"0.5rem",cursor:"pointer",color:"#8a7a6a",fontSize:"0.82rem" }}>
-          <input type="checkbox" checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#c8a97e" }}/>
-          Lançamento recorrente (repete mensalmente)
+          <input type="checkbox" disabled={form.bank==="Recorrência" || saving} checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#c8a97e" }}/>
+          {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (use Recorrentes para aplicar em outro mês)"}
         </label>
         <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#c8a97e":"#2a2018",color:valid?"#0f0c0a":"#5a4a3a",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
-          {isEdit?"Salvar Alterações":"Confirmar Lançamento"}
+          {saving?"Salvando…":isEdit?"Salvar Alterações":"Confirmar Lançamento"}
         </button>
       </div>
     </Modal>
@@ -311,6 +312,7 @@ function Finance() {
   const [showAdd, setShowAdd]       = useState(false);
   const [editEntry, setEditEntry]   = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
+  const [showRecurring, setShowRecurring] = useState(false);
   const [showBudgets, setShowBudgets] = useState(false);
   const [importItems, setImportItems] = useState(null);
   const toastTimer = useRef(null);
@@ -442,8 +444,10 @@ function Finance() {
 
     if (form.id) {
       const updated = await api.updateEntry(form.id, form);
-      setEntries(prev=>prev.map(e=>e.id===form.id?updated:e));
+      const inMonth=Number(updated.date.slice(0,4))===year && Number(updated.date.slice(5,7))===month+1;
+      setEntries(prev=>inMonth?prev.map(e=>e.id===form.id?updated:e):prev.filter(e=>e.id!==form.id));
       setAllEntries(prev=>prev.map(e=>e.id===form.id?updated:e));
+      await loadMonth(); await loadAll();
       showToast("Lançamento atualizado ✓");
     } else {
       const created = await api.addEntry(form);
@@ -557,6 +561,7 @@ function Finance() {
             <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar
             </button>
+            <button onClick={()=>setShowRecurring(true)} style={S.btn(false)}><RotateCcw size={14}/> Recorrentes</button>
             <button onClick={()=>setShowBudgets(true)} style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
               <Wallet size={14}/> Orçamentos
             </button>
@@ -771,10 +776,10 @@ function Finance() {
                       <div style={{ width:8,height:8,borderRadius:"50%",background:e.type==="income"?"#7ec87e":"#c87e7e",flexShrink:0 }}/>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
-                        <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",gap:"0.4rem",alignItems:"center" }}>
+                        <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
-                          {e.recurring && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>↻ recorrente</span>}
+                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>↻ recorrente</span>}
                         </div>
                       </div>
                     </div>
@@ -782,7 +787,7 @@ function Finance() {
                       <span style={{ color:e.type==="income"?"#7ec87e":"#c87e7e",fontWeight:"600",fontSize:"0.9rem" }}>
                         {e.type==="income"?"+":"-"}{fmt(e.amount)}
                       </span>
-                      <button onClick={()=>setEditEntry(e)} title="Editar" style={{ background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"0.2rem" }}>
+                      <button onClick={()=>setEditEntry(e)} title="Editar" aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#c8a97e",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Pencil size={13}/>
                       </button>
                       <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"0.2rem" }}>
@@ -803,8 +808,16 @@ function Finance() {
       </div>
 
       {/* ── MODALS ── */}
-      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null}/>
-      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry}/>
+      <Modal show={showRecurring} onClose={()=>setShowRecurring(false)}>
+        <h2 style={{color:"#c8a97e",marginBottom:16}}>Lançamentos recorrentes</h2>
+        <p style={{color:"#8a7a6a",marginBottom:16}}>Aplica os lançamentos marcados de meses anteriores em {MONTHS[month]} de {year}. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
+        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").length===0 && <p>Marque um lançamento como recorrente ao criar ou editar.</p>}
+        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><div key={e.id} style={{padding:"12px 0",borderBottom:"1px solid #3d342a",display:"flex",gap:12,justifyContent:"space-between"}}><span>{e.description}<br/>{fmt(e.amount)} · dia {String(e.date).slice(8,10)}</span><button style={S.btn(false)} onClick={()=>{setShowRecurring(false);setEditEntry(e);}}>Editar</button></div>)}
+        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Para parar, edite o lançamento original e desmarque Recorrente. Os meses já gerados permanecem. Alterações no original valem para as próximas aplicações.</p>
+        <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já existentes`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
+      </Modal>
+      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving}/>
+      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving}/>
 
       <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={(cat,amt)=>saveSafely(()=>handleBudgetSave(cat,amt))} onDelete={cat=>saveSafely(()=>handleBudgetDelete(cat))} budgets={budgets}/>
 
