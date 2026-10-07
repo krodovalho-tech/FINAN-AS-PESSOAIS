@@ -1,3 +1,4 @@
+import "./responsive.css";
 import { api, request } from "./api.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { normalizeImport } from "./import.js";
@@ -171,6 +172,15 @@ const PieLabel = ({ cx,cy,midAngle,outerRadius,name,percent }) => {
   if (percent < 0.04) return null;
   return <text x={x} y={y} fill="#8a7a6a" textAnchor={x>cx?"start":"end"} dominantBaseline="central" fontSize="10">{`${(percent*100).toFixed(0)}%`}</text>;
 };
+
+function CategoryAxisTick({x,y,payload}) {
+  const words=String(payload?.value || "").split(/\s+/); const lines=[]; let line="";
+  for(const word of words){if(line && `${line} ${word}`.length>20){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}
+  if(line)lines.push(line);
+  return <text x={x-8} y={y} textAnchor="end" fill="#b7a48e" fontSize={10}>
+    {lines.map((text,i)=><tspan key={i} x={x-8} dy={i===0?-(lines.length-1)*6:12}>{text}</tspan>)}
+  </text>;
+}
 
 // ─── ENTRY FORM MODAL ────────────────────────────────────────────────────────
 function EntryModal({ show, onClose, onSave, initial, saving }) {
@@ -612,10 +622,10 @@ function Finance() {
         </div>
       </div>
 
-      <div style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
+      <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
 
         {/* ── KPIs ── */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:"0.8rem", marginBottom:"1.2rem" }}>
+        <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
           {[
             { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#7ec87e" },
             { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#c87e7e" },
@@ -667,7 +677,7 @@ function Finance() {
                 {biggestExpense && (
                   <div style={{ ...S.card, marginBottom:"1.2rem", display:"flex", alignItems:"center", gap:"1rem", background:"rgba(200,126,126,0.07)", borderColor:"rgba(200,126,126,0.3)" }}>
                     <TrendingDown size={20} color="#c87e7e" style={{ flexShrink:0 }}/>
-                    <div>
+                    <div style={{minWidth:0,overflowWrap:"anywhere"}}>
                       <span style={{ fontSize:"0.68rem", color:"#8a7a6a", textTransform:"uppercase", letterSpacing:"0.05em" }}>Maior despesa do mês</span>
                       <div style={{ fontSize:"0.9rem" }}>{biggestExpense.description} <span style={{ color:"#5a4a3a" }}>· {biggestExpense.category}</span> <strong style={{ color:"#c87e7e" }}>{fmt(biggestExpense.amount)}</strong></div>
                     </div>
@@ -675,32 +685,35 @@ function Finance() {
                 )}
 
                 {/* Charts row */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.8rem", marginBottom:"1.2rem" }}>
+                <div className="chart-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
                   {/* Pie */}
                   <div style={S.card}>
                     <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Despesas por categoria</p>
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" labelLine={false} label={PieLabel}>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" labelLine={false} label={false}>
                           {pieData.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
                         </Pie>
                         <Tooltip content={<ChartTooltip/>}/>
-                        <Legend iconSize={8} wrapperStyle={{ fontSize:"0.7rem",color:"#8a7a6a" }}/>
+
                       </PieChart>
                     </ResponsiveContainer>
+                    <ul className="category-legend" aria-label="Categorias de despesas">
+                      {pieData.map((item,i)=><li key={item.name}><span className="legend-dot" style={{background:COLORS[i%COLORS.length]}}/><span className="legend-name">{item.name}</span><span className="legend-amount">{fmt(item.value)}<small>{pct(item.value,totalExpense)}%</small></span></li>)}
+                    </ul>
                   </div>
 
                   {/* Bar */}
                   <div style={S.card}>
                     <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Receita vs Despesa por categoria</p>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={barData} margin={{ left:-10, bottom:30 }}>
-                        <XAxis dataKey="name" tick={{ fontSize:9,fill:"#8a7a6a" }} interval={0} angle={-35} textAnchor="end" height={60}/>
-                        <YAxis tick={{ fontSize:9,fill:"#8a7a6a" }} width={55} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(0)}k`:`${v}`}/>
+                    <div className="bar-key"><span><i style={{background:"#7ec87e"}}/>Receita</span><span><i style={{background:"#c87e7e"}}/>Despesa</span></div>
+                    <ResponsiveContainer width="100%" height={Math.max(240,barData.length*52+40)}>
+                      <BarChart data={barData} layout="vertical" margin={{ left:0, right:12, top:8, bottom:8 }}>
+                        <XAxis type="number" tick={{ fontSize:10,fill:"#8a7a6a" }} tickFormatter={v=>v>=1000?`${(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})}k`:`${v}`}/>
+                        <YAxis type="category" dataKey="name" width={125} interval={0} tick={<CategoryAxisTick/>}/>
                         <Tooltip content={<ChartTooltip/>}/>
-                        <Legend iconSize={8} wrapperStyle={{ fontSize:"0.72rem",color:"#8a7a6a" }}/>
-                        <Bar dataKey="Receita" fill="#7ec87e" radius={[3,3,0,0]}/>
-                        <Bar dataKey="Despesa" fill="#c87e7e" radius={[3,3,0,0]}/>
+                        <Bar dataKey="Receita" fill="#7ec87e" radius={[0,3,3,0]}/>
+                        <Bar dataKey="Despesa" fill="#c87e7e" radius={[0,3,3,0]}/>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -732,7 +745,7 @@ function Finance() {
                     const budRatio = budLim && v.expense>0 ? v.expense/budLim : null;
                     return (
                       <div key={i} style={{ padding:"0.65rem 1rem",borderBottom:"1px solid #2a2018" }}>
-                        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px" }}>
+                        <div className="category-summary" style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px" }}>
                           <div style={{ display:"flex",alignItems:"center",gap:"0.7rem" }}>
                             <div style={{ width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0 }}/>
                             <span style={{ fontSize:"0.85rem" }}>{cat}</span>
