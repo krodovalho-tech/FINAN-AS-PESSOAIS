@@ -1,11 +1,28 @@
 import { sql } from '@vercel/postgres';
 import { requireAuth } from '../lib/auth.js';
-import { recurringPayload } from '../lib/entry-validation.js';
+import { recurringPayload, validEntry } from '../lib/entry-validation.js';
 export default async function handler(req,res) {
  if(!requireAuth(req,res))return;
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='POST')return res.status(405).json({error:'Operação não permitida.'});
  const {year,month,action,id}=req.body || {};
+ if(action==='edit') {
+  const e=req.body?.entry;
+  if(!/^[1-9]\d*$/.test(String(id || '')) || !validEntry(e))return res.status(400).json({error:'Confira os campos da recorrência.'});
+  try {
+   const prefix=`${Number(id)}:%`,day=Number(e.date.slice(8,10));
+   const result=await sql`WITH original AS (
+    UPDATE entries SET type=${e.type},category=${e.category},description=${e.description},amount=${Number(e.amount)},date=${e.date},notes=${e.notes || null}
+    WHERE id=${Number(id)} AND recurring=TRUE AND bank IS DISTINCT FROM 'Recorrência' RETURNING id
+   ), forecasts AS (
+    UPDATE entries SET type=${e.type},category=${e.category},description=${e.description},amount=${Number(e.amount)},notes=${e.notes || null},
+     date=(date_trunc('month',date)::date + (LEAST(${day},EXTRACT(DAY FROM (date_trunc('month',date)+INTERVAL '1 month - 1 day'))::int)-1))
+    WHERE bank='Recorrência' AND source_id LIKE ${prefix} AND confirmed IS NOT TRUE AND EXISTS (SELECT 1 FROM original) RETURNING id
+   ) SELECT (SELECT COUNT(*)::int FROM original) AS updated,(SELECT COUNT(*)::int FROM forecasts) AS forecasts`;
+   if(!result.rows[0]?.updated)return res.status(404).json({error:'Recorrência não encontrada ou já cancelada.'});
+   return res.status(200).json({ok:true,...result.rows[0]});
+  }catch{return res.status(500).json({error:'Não foi possível salvar a recorrência.'});}
+ }
  if(action==='stop') {
   if(!/^[1-9]\d*$/.test(String(id || '')))return res.status(400).json({error:'Lançamento inválido.'});
   try {

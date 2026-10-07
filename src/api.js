@@ -13,6 +13,7 @@ export const api = {
   updateEntry:(id,e)=>send(`entries?id=${id}`,'PUT',e),
   deleteEntry:id=>request(`entries?id=${id}`,{method:'DELETE'}),
   bulkInsert:entries=>send('entries','PATCH',{entries}),
+  editRecurring:(id,entry)=>send('recurring','POST',{action:'edit',id,entry}),
   stopRecurring:id=>send('recurring','POST',{action:'stop',id}),
   applyRecurring:(month,year)=>send('recurring','POST',{month,year}),
   getBudgets:()=>request('budgets'),

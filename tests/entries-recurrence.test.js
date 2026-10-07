@@ -74,3 +74,16 @@ test('encerrar pela cópia identifica a série original e protege pagamentos con
  const stopped=await call(88);assert.equal(stopped.code,200);assert.deepEqual(stopped.data,{ok:true,stopped:1,removed:3});
  globalThis.stopSql=async()=>{throw new Error('unavailable');};assert.equal((await call(88)).code,500);
 });
+test('edição da série valida campos e atualiza somente previsões não confirmadas',async()=>{
+ const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
+ .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.editSeriesSql(...args);")
+ .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
+ const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+ let calls=0;globalThis.editSeriesSql=async(strings,...values)=>{calls++;const query=strings.join('');assert.match(query,/confirmed IS NOT TRUE/);assert.match(query,/LEAST/);assert.match(query,/bank='Recorrência'/);assert.ok(values.includes('42:%'));return {rows:[{updated:1,forecasts:2}]};};
+ const call=async(entry)=>{const res={setHeader(){},status(n){this.code=n;return this;},json(data){this.data=data;return this;}};await handler({method:'POST',body:{action:'edit',id:42,entry}},res);return res;};
+ const entry={type:'expense',category:'Moradia',description:'Nova prestação',amount:1200,date:'2026-10-31'};
+ assert.equal((await call({...entry,amount:-1})).code,400);assert.equal(calls,0);
+ assert.deepEqual((await call(entry)).data,{ok:true,updated:1,forecasts:2});
+ globalThis.editSeriesSql=async()=>({rows:[{updated:0,forecasts:0}]});assert.equal((await call(entry)).code,404);
+});

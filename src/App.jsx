@@ -182,6 +182,28 @@ function CategoryAxisTick({x,y,payload}) {
   </text>;
 }
 
+function RecurringItem({entry,saving,onSave,onStop}) {
+  const [editing,setEditing]=useState(false),[confirm,setConfirm]=useState(false);
+  const [form,setForm]=useState(()=>normalizeEntryForm(entry,today));
+  const set=(key,value)=>setForm(f=>({...f,[key]:value}));
+  const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date;
+  return <div style={{padding:"16px 0",borderBottom:"1px solid #3d342a"}}>
+    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#c8a97e"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#8a7a6a"}}>{entry.category}</small></div>
+    {!editing && <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}><button disabled={saving} style={S.btn(false)} onClick={()=>{setForm(normalizeEntryForm(entry,today));setEditing(true);setConfirm(false);}}>Editar informações</button><button disabled={saving} style={{...S.btn(false),color:"#c87e7e"}} onClick={()=>setConfirm(true)}>Cancelar recorrência</button></div>}
+    {editing && <div style={{display:"grid",gap:12,marginTop:16}}>
+      <label style={S.label}>Descrição<input style={S.input} value={form.description} onChange={e=>set("description",e.target.value)}/></label>
+      <label style={S.label}>Tipo<select style={S.input} value={form.type} onChange={e=>set("type",e.target.value)}><option value="expense">Despesa</option><option value="income">Receita</option></select></label>
+      <label style={S.label}>Categoria<select style={S.input} value={form.category} onChange={e=>set("category",e.target.value)}>{[...new Set([form.category,...ALL_CATEGORIES])].map(c=><option key={c}>{c}</option>)}</select></label>
+      <label style={S.label}>Valor (R$)<input style={S.input} type="number" min="0.01" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)}/></label>
+      <label style={S.label}>Data original / dia do vencimento<input style={S.input} type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></label>
+      <label style={S.label}>Observações<textarea style={S.input} value={form.notes || ""} onChange={e=>set("notes",e.target.value)}/></label>
+      <p style={{fontSize:13,color:"#8a7a6a"}}>Altera o lançamento original e suas previsões ainda não confirmadas. O dia do vencimento é aplicado nos meses seguintes.</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving || !valid} onClick={async()=>{if(await onSave(form))setEditing(false);}}>{saving?"Salvando…":"Salvar alterações"}</button><button style={S.btn(false)} disabled={saving} onClick={()=>setEditing(false)}>Descartar alterações</button></div>
+    </div>}
+    {confirm && <div style={{marginTop:16,padding:12,border:"1px solid #c87e7e",borderRadius:8}}><p style={{fontSize:14,marginBottom:12}}>Cancelar esta recorrência e remover suas previsões? O pagamento original será mantido.</p><div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving} onClick={()=>onStop(entry)}>Confirmar cancelamento</button><button style={S.btn(false)} disabled={saving} onClick={()=>setConfirm(false)}>Voltar</button></div></div>}
+  </div>;
+}
+
 // ─── ENTRY FORM MODAL ────────────────────────────────────────────────────────
 function EntryModal({ show, onClose, onSave, initial, saving }) {
   const isEdit = !!initial?.id;
@@ -538,8 +560,8 @@ function Finance() {
   const saveSafely = async (operation) => {
     if (savingRef.current) return;
     savingRef.current = true; setSaving(true);
-    try { await operation(); setSyncError(""); setLastSync(new Date()); }
-    catch (err) { setSyncError(err.message); showToast(err.message); }
+    try { await operation(); setSyncError(""); setLastSync(new Date()); return true; }
+    catch (err) { setSyncError(err.message); showToast(err.message); return false; }
     finally { savingRef.current = false; setSaving(false); }
   };
 
@@ -840,8 +862,8 @@ function Finance() {
         <h2 style={{color:"#c8a97e",marginBottom:16}}>Lançamentos recorrentes</h2>
         <p style={{color:"#8a7a6a",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").length===0 && <p>Marque um lançamento como recorrente ao criar ou editar.</p>}
-        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><div key={e.id} style={{padding:"12px 0",borderBottom:"1px solid #3d342a",display:"flex",gap:12,justifyContent:"space-between"}}><span>{e.description}<br/>{fmt(e.amount)} · dia {String(e.date).slice(8,10)}</span><button style={S.btn(false)} onClick={()=>{setShowRecurring(false);setEditEntry(e);}}>Editar</button></div>)}
-        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Para parar, edite o lançamento original e desmarque Recorrente. Os meses já gerados permanecem. Alterações no original valem para os meses ainda não gerados.</p>
+        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><RecurringItem key={e.id} entry={e} saving={saving} onStop={entry=>saveSafely(()=>handleStopRecurring(entry))} onSave={form=>saveSafely(async()=>{const result=await api.editRecurring(form.id,form);await loadMonth();await loadAll();showToast(`Recorrência atualizada; ${result.forecasts} previsões ajustadas.`);})}/>)}
+        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Use Editar informações para ajustar a série ou Cancelar recorrência para encerrar a repetição e remover suas previsões.</p>
         <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já processados`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
       </Modal>
       <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving}/>
