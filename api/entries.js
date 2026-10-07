@@ -81,7 +81,9 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
       const { id } = req.query;
       if (!/^[1-9]\d*$/.test(String(id || ''))) return res.status(400).json({ error: 'Identificador inválido' });
-      await sql`DELETE FROM entries WHERE id=${parseInt(id, 10)}`;
+      await sql`CREATE TABLE IF NOT EXISTS recurrence_occurrences (source_id TEXT PRIMARY KEY)`;
+      await sql`WITH removed AS (DELETE FROM entries WHERE id=${parseInt(id, 10)} RETURNING bank,source_id)
+        INSERT INTO recurrence_occurrences (source_id) SELECT source_id FROM removed WHERE bank='Recorrência' AND source_id IS NOT NULL ON CONFLICT DO NOTHING`;
       return res.status(200).json({ ok: true });
     }
 

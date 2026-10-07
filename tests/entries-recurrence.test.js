@@ -33,3 +33,25 @@ test('edição valida antes do SQL e devolve data utilizável no formulário',as
  assert.equal((await call({...body,date:'2026-02-30'})).code,400);assert.equal(calls,0);
  const saved=await call(body);assert.equal(saved.code,200);assert.equal(saved.data.date,'2026-11-06');assert.equal(calls,1);
 });
+test('aplicação mensal normaliza datas do banco, conta repetidos e rejeita mês inválido',async()=>{
+ const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
+ .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.recurringSql(...args);")
+ .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
+ const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+ let calls=0;const processed=new Set();
+ globalThis.recurringSql=async(strings,...values)=>{
+ calls++;const q=strings.join('');
+ if(q.startsWith('SELECT'))return {rows:[{id:2115,type:'expense',category:'Moradia',description:'Prestação',amount:1000,date:new Date('2026-10-06T00:00:00Z'),recurring:true}]};
+ if(q.startsWith('WITH')){
+ assert.match(q,/INSERT INTO recurrence_occurrences/);const candidates=JSON.parse(values[0]);const rows=[];
+ for(const e of candidates){assert.equal(e.date,'2026-11-06');if(!processed.has(e.source_id)){processed.add(e.source_id);rows.push({id:1});}}
+ return {rows};
+ }
+ return {rows:[]};
+ };
+ const call=async(body)=>{const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;return this;}};await handler({method:'POST',body},res);return res;};
+ assert.equal((await call({year:2026,month:12})).code,400);assert.equal(calls,0);
+ assert.deepEqual((await call({year:2026,month:10})).data,{inserted:1,skipped:0});
+ assert.deepEqual((await call({year:2026,month:10})).data,{inserted:0,skipped:1});
+});

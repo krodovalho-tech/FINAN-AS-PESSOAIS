@@ -212,7 +212,7 @@ function EntryModal({ show, onClose, onSave, initial, saving }) {
         </div>
         <label style={{ display:"flex",alignItems:"center",gap:"0.5rem",cursor:"pointer",color:"#8a7a6a",fontSize:"0.82rem" }}>
           <input type="checkbox" disabled={form.bank==="Recorrência" || saving} checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#c8a97e" }}/>
-          {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (use Recorrentes para aplicar em outro mês)"}
+          {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (aparece automaticamente nos meses seguintes)"}
         </label>
         <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#c8a97e":"#2a2018",color:valid?"#0f0c0a":"#5a4a3a",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
           {saving?"Salvando…":isEdit?"Salvar Alterações":"Confirmar Lançamento"}
@@ -323,7 +323,12 @@ function Finance() {
     const sequence = ++monthRequest.current;
     setLoading(true);
     try {
+      const generated = await api.applyRecurring(month,year);
       const data = await api.getEntries(month, year);
+      if (generated.inserted>0) {
+        const all = await api.getAllEntries();
+        if (sequence === monthRequest.current) setAllEntries(all);
+      }
       if (sequence !== monthRequest.current) return;
       setEntries(data); setSyncError(""); setLastSync(new Date());
     } catch (err) { if (sequence === monthRequest.current) setSyncError(err.message); }
@@ -779,7 +784,7 @@ function Finance() {
                         <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
-                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>↻ recorrente</span>}
+                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
                         </div>
                       </div>
                     </div>
@@ -810,11 +815,11 @@ function Finance() {
       {/* ── MODALS ── */}
       <Modal show={showRecurring} onClose={()=>setShowRecurring(false)}>
         <h2 style={{color:"#c8a97e",marginBottom:16}}>Lançamentos recorrentes</h2>
-        <p style={{color:"#8a7a6a",marginBottom:16}}>Aplica os lançamentos marcados de meses anteriores em {MONTHS[month]} de {year}. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
+        <p style={{color:"#8a7a6a",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").length===0 && <p>Marque um lançamento como recorrente ao criar ou editar.</p>}
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><div key={e.id} style={{padding:"12px 0",borderBottom:"1px solid #3d342a",display:"flex",gap:12,justifyContent:"space-between"}}><span>{e.description}<br/>{fmt(e.amount)} · dia {String(e.date).slice(8,10)}</span><button style={S.btn(false)} onClick={()=>{setShowRecurring(false);setEditEntry(e);}}>Editar</button></div>)}
-        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Para parar, edite o lançamento original e desmarque Recorrente. Os meses já gerados permanecem. Alterações no original valem para as próximas aplicações.</p>
-        <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já existentes`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
+        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Para parar, edite o lançamento original e desmarque Recorrente. Os meses já gerados permanecem. Alterações no original valem para os meses ainda não gerados.</p>
+        <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já processados`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
       </Modal>
       <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving}/>
       <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving}/>

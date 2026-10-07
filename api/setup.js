@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     `;
     await sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS source_id TEXT, ADD COLUMN IF NOT EXISTS bank TEXT, ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT FALSE, ADD COLUMN IF NOT EXISTS reconciliation JSONB`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS entries_source_unique ON entries (bank, source_id) WHERE source_id IS NOT NULL AND bank IS NOT NULL`;
+    await sql`CREATE TABLE IF NOT EXISTS recurrence_occurrences (source_id TEXT PRIMARY KEY)`;
     res.status(200).json({ ok: true, message: 'Tabelas criadas com sucesso.' });
   } catch (err) {
     res.status(500).json({ error: 'Não foi possível preparar o banco.' });
