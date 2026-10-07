@@ -1,3 +1,7 @@
+# Atualização de acesso e sincronização
+
+Antes de publicar, siga [SYNC.md](SYNC.md). O acesso agora exige FINANCE_PASSWORD na Vercel. A preparação do banco usa POST autenticado pelo botão Preparar banco; o antigo GET /api/setup foi desativado.
+
 # 💰 Controle Financeiro Pessoal v2
 
 App de controle financeiro pessoal com dashboard, orçamentos por categoria, importação OFX/CSV e tendências mensais.
@@ -174,3 +178,4 @@ CREATE TABLE budgets (
 
 **npm run dev não carrega dados**
 → Use `npx vercel dev` para rodar com as funções serverless localmente.
+

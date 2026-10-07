@@ -1,14 +1,10 @@
+import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
+
 
 export default async function handler(req, res) {
-  cors(res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (!requireAuth(req, res)) return;
 
   try {
     // ── LIST ──────────────────────────────────────────────────────────────
@@ -43,6 +39,7 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Não foi possível acessar o banco. Verifique a conexão e a configuração das tabelas.' });
   }
 }
+

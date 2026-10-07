@@ -1,7 +1,9 @@
+import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (!requireAuth(req, res)) return;
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS entries (
@@ -24,8 +26,11 @@ export default async function handler(req, res) {
         updated_at    TIMESTAMPTZ   DEFAULT NOW()
       )
     `;
+    await sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS source_id TEXT, ADD COLUMN IF NOT EXISTS bank TEXT, ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT FALSE, ADD COLUMN IF NOT EXISTS reconciliation JSONB`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS entries_source_unique ON entries (bank, source_id) WHERE source_id IS NOT NULL AND bank IS NOT NULL`;
     res.status(200).json({ ok: true, message: 'Tabelas criadas com sucesso.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Não foi possível preparar o banco.' });
   }
 }
+
