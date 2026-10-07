@@ -571,8 +571,18 @@ function Finance() {
         {saving ? "Salvando no banco online…" : syncError || (lastSync ? `Sincronizado às ${lastSync.toLocaleTimeString("pt-BR")}` : "Conectando ao banco online…")}
         <button style={{...S.btn(false),marginLeft:12}} onClick={()=>{loadMonth();loadAll();loadBudgets();}}>Atualizar</button>
         {syncError && <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{ await request("setup",{method:"POST"}); await loadMonth(); await loadAll(); await loadBudgets(); })}>Preparar banco</button>}
+        <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{await request("assistant?action=revoke",{method:"POST"});showToast("Conexões do assistente revogadas");})}>Desconectar assistente</button>
         <button style={{...S.btn(false),marginLeft:8}} onClick={()=>request("session",{method:"DELETE"}).then(()=>location.reload()).catch(err=>setSyncError(err.message))}>Sair</button>
       </div>
+      {new URLSearchParams(location.search).get("connectAssistant") === "1" && <div style={{...S.card,maxWidth:700,margin:"1rem auto"}}>
+        <h2>Conectar seu assistente</h2><p>Autoriza consultar seus totais e registrar os gastos que você informar. A conexão dura 90 dias. Sua senha permanece neste painel.</p>
+        <button style={S.btn(true)} disabled={saving} onClick={()=>saveSafely(async()=>{
+          const params=new URLSearchParams(location.search);
+          const data=await request("assistant?action=authorize",{method:"POST",body:JSON.stringify({state:params.get("state"),challenge:params.get("challenge")})});
+          location.assign(data.redirect);
+        })}>Autorizar conexão</button>
+        <button style={{...S.btn(false),marginLeft:12}} onClick={()=>location.assign(location.pathname)}>Cancelar</button>
+      </div>}
       {/* ── NAV ── */}
       <div style={{ background:"#1a1612", borderBottom:"1px solid #3d342a" }}>
         <div style={{ maxWidth:"1100px", margin:"0 auto", display:"flex" }}>
