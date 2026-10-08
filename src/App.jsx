@@ -23,8 +23,8 @@ const INCOME_CATEGORIES = [
   "Salário","Pró-labore","Dividendos","Aluguel","Freelance","Outros"
 ];
 const ALL_CATEGORIES = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
-const COLORS = ["#c8a97e","#7eb8c8","#c87e9a","#7ec87e","#c8c87e","#9a7ec8",
-                 "#c8957e","#7ec8b8","#b8c87e","#7e9ac8","#c87e7e"];
+const COLORS = ["#75b8ff","#7eb8c8","#c87e9a","#53d6a0","#c8c87e","#9a7ec8",
+                 "#c8957e","#7ec8b8","#b8c87e","#7e9ac8","#ff929b"];
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                 "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -116,10 +116,10 @@ function parseCSV(content) {
 // ─── API CLIENT ─────────────────────────────────────────────────────────────
 // ─── STYLE HELPERS ──────────────────────────────────────────────────────────
 const S = {
-  input: { width:"100%", padding:"0.65rem 0.85rem", background:"#0f0c0a", border:"1px solid #3d342a", borderRadius:"8px", color:"#e8d8c0", fontSize:"0.9rem", boxSizing:"border-box", marginTop:"0.3rem", fontFamily:"'Source Sans 3', sans-serif" },
-  label: { fontSize:"0.7rem", color:"#8a7a6a", textTransform:"uppercase", letterSpacing:"0.07em" },
-  card: { background:"#1a1612", border:"1px solid #3d342a", borderRadius:"10px", padding:"1rem" },
-  btn: (active) => ({ padding:"0.5rem 0.9rem", background:active?"rgba(200,169,126,0.15)":"#2a2018", border:`1px solid ${active?"#c8a97e":"#3d342a"}`, borderRadius:"8px", color:active?"#c8a97e":"#8a7a6a", cursor:"pointer", fontSize:"0.8rem", fontFamily:"'Source Sans 3',sans-serif" }),
+  input: { width:"100%", padding:"0.65rem 0.85rem", background:"#10151d", border:"1px solid #35465c", borderRadius:"8px", color:"#edf3fa", fontSize:"0.9rem", boxSizing:"border-box", marginTop:"0.3rem", fontFamily:"'Source Sans 3', sans-serif" },
+  label: { fontSize:"0.7rem", color:"#aab9cb", textTransform:"uppercase", letterSpacing:"0.07em" },
+  card: { background:"#19222e", border:"1px solid #35465c", borderRadius:"10px", padding:"1rem" },
+  btn: (active) => ({ padding:"0.5rem 0.9rem", background:active?"rgba(117,184,255,0.15)":"#253244", border:`1px solid ${active?"#75b8ff":"#35465c"}`, borderRadius:"8px", color:active?"#75b8ff":"#aab9cb", cursor:"pointer", fontSize:"0.8rem", fontFamily:"'Source Sans 3',sans-serif" }),
 };
 
 // ─── MODAL ──────────────────────────────────────────────────────────────────
@@ -132,8 +132,8 @@ function Modal({ show, onClose, children, maxWidth=480 }) {
   if (!show) return null;
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem" }} onClick={onClose}>
-      <div style={{ background:"#1a1612",border:"1px solid #3d342a",borderRadius:"14px",padding:"2rem",width:"100%",maxWidth,position:"relative",maxHeight:"90vh",overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
-        <button onClick={onClose} style={{ position:"absolute",top:"1rem",right:"1rem",background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"4px" }}>
+      <div style={{ background:"#19222e",border:"1px solid #35465c",borderRadius:"14px",padding:"2rem",width:"100%",maxWidth,position:"relative",maxHeight:"90vh",overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{ position:"absolute",top:"1rem",right:"1rem",background:"none",border:"none",color:"#aab9cb",cursor:"pointer",padding:"4px" }}>
           <X size={20}/>
         </button>
         {children}
@@ -146,9 +146,9 @@ function Modal({ show, onClose, children, maxWidth=480 }) {
 function Toast({ msg, onUndo }) {
   if (!msg) return null;
   return (
-    <div style={{ position:"fixed",bottom:"1.5rem",right:"1.5rem",background:"#1a1612",border:"1px solid #c8a97e",color:"#c8a97e",padding:"0.7rem 1.2rem",borderRadius:"8px",fontSize:"0.85rem",zIndex:200,display:"flex",alignItems:"center",gap:"0.8rem",boxShadow:"0 4px 20px rgba(0,0,0,0.5)" }}>
+    <div style={{ position:"fixed",bottom:"1.5rem",right:"1.5rem",background:"#19222e",border:"1px solid #75b8ff",color:"#75b8ff",padding:"0.7rem 1.2rem",borderRadius:"8px",fontSize:"0.85rem",zIndex:200,display:"flex",alignItems:"center",gap:"0.8rem",boxShadow:"0 4px 20px rgba(0,0,0,0.5)" }}>
       {msg}
-      {onUndo && <button onClick={onUndo} style={{ background:"none",border:"none",color:"#c8a97e",cursor:"pointer",textDecoration:"underline",fontSize:"0.82rem",display:"flex",alignItems:"center",gap:"4px" }}><RotateCcw size={13}/> Desfazer</button>}
+      {onUndo && <button onClick={onUndo} style={{ background:"none",border:"none",color:"#75b8ff",cursor:"pointer",textDecoration:"underline",fontSize:"0.82rem",display:"flex",alignItems:"center",gap:"4px" }}><RotateCcw size={13}/> Desfazer</button>}
     </div>
   );
 }
@@ -157,8 +157,8 @@ function Toast({ msg, onUndo }) {
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:"#1a1612",border:"1px solid #3d342a",color:"#e8d8c0",fontSize:"0.78rem",borderRadius:"6px",padding:"0.5rem 0.8rem" }}>
-      {label && <p style={{ color:"#8a7a6a",marginBottom:"4px",fontSize:"0.72rem" }}>{label}</p>}
+    <div style={{ background:"#19222e",border:"1px solid #35465c",color:"#edf3fa",fontSize:"0.78rem",borderRadius:"6px",padding:"0.5rem 0.8rem" }}>
+      {label && <p style={{ color:"#aab9cb",marginBottom:"4px",fontSize:"0.72rem" }}>{label}</p>}
       {payload.map((p,i) => <p key={i} style={{ color:p.color }}>{p.name}: {fmt(p.value)}</p>)}
     </div>
   );
@@ -171,7 +171,7 @@ const PieLabel = ({ cx,cy,midAngle,outerRadius,name,percent }) => {
   const x = cx + r*Math.cos(-midAngle*RAD);
   const y = cy + r*Math.sin(-midAngle*RAD);
   if (percent < 0.04) return null;
-  return <text x={x} y={y} fill="#8a7a6a" textAnchor={x>cx?"start":"end"} dominantBaseline="central" fontSize="10">{`${(percent*100).toFixed(0)}%`}</text>;
+  return <text x={x} y={y} fill="#aab9cb" textAnchor={x>cx?"start":"end"} dominantBaseline="central" fontSize="10">{`${(percent*100).toFixed(0)}%`}</text>;
 };
 
 function CategoryAxisTick({x,y,payload}) {
@@ -198,16 +198,16 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
   entries.filter(e=>e.type==="expense").forEach(e=>{const d=travelDetails(e).destination;if(d)totals[d]=(totals[d]||0)+Number(e.amount);});
   const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
   return <Modal show={show} onClose={onClose}>
-    <h2 style={{color:"#c8a97e",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
-    <p style={{color:"#8a7a6a",marginBottom:16}}>Cadastre o destino e selecione-o ao lançar ou editar uma despesa.</p>
+    <h2 style={{color:"#75b8ff",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
+    <p style={{color:"#aab9cb",marginBottom:16}}>Cadastre o destino e selecione-o ao lançar ou editar uma despesa.</p>
     <form onSubmit={async e=>{e.preventDefault();if(await onSave({destination:destination.trim(),start_date:startDate || null})){setDestination("");setStartDate("");}}} style={{display:"grid",gap:12}}>
       <label style={S.label}>Destino<input aria-label="Novo destino" style={S.input} maxLength={160} placeholder="Cidade / UF" value={destination} onChange={e=>setDestination(e.target.value)} required/></label>
       <label style={S.label}>Partida (opcional)<input aria-label="Data de partida" type="date" style={S.input} value={startDate} onChange={e=>setStartDate(e.target.value)}/></label>
       <button style={S.btn(true)} disabled={saving || !destination.trim()} type="submit">{saving?"Salvando…":"Cadastrar destino"}</button>
     </form>
     <p style={{...S.label,marginTop:24,marginBottom:12}}>Despesas acumuladas por destino · todos os meses</p>
-    {!destinations.length && <p style={{color:"#8a7a6a"}}>Nenhum destino cadastrado.</p>}
-    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #3d342a",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#8a7a6a",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div></div>;})}
+    {!destinations.length && <p style={{color:"#aab9cb"}}>Nenhum destino cadastrado.</p>}
+    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div></div>;})}
   </Modal>;
 }
 
@@ -216,9 +216,9 @@ function RecurringItem({entry,saving,onSave,onStop,trips}) {
   const [form,setForm]=useState(()=>normalizeEntryForm(entry,today));
   const set=(key,value)=>setForm(f=>({...f,[key]:value}));
   const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date;
-  return <div style={{padding:"16px 0",borderBottom:"1px solid #3d342a"}}>
-    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#c8a97e"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#8a7a6a"}}>{entry.category}</small></div>
-    {!editing && <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}><button disabled={saving} style={S.btn(false)} onClick={()=>{setForm(normalizeEntryForm(entry,today));setEditing(true);setConfirm(false);}}>Editar informações</button><button disabled={saving} style={{...S.btn(false),color:"#c87e7e"}} onClick={()=>setConfirm(true)}>Cancelar recorrência</button></div>}
+  return <div style={{padding:"16px 0",borderBottom:"1px solid #35465c"}}>
+    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#75b8ff"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#aab9cb"}}>{entry.category}</small></div>
+    {!editing && <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}><button disabled={saving} style={S.btn(false)} onClick={()=>{setForm(normalizeEntryForm(entry,today));setEditing(true);setConfirm(false);}}>Editar informações</button><button disabled={saving} style={{...S.btn(false),color:"#ff929b"}} onClick={()=>setConfirm(true)}>Cancelar recorrência</button></div>}
     {editing && <div style={{display:"grid",gap:12,marginTop:16}}>
       <label style={S.label}>Descrição<input style={S.input} value={form.description} onChange={e=>set("description",e.target.value)}/></label>
       <label style={S.label}>Tipo<select style={S.input} value={form.type} onChange={e=>set("type",e.target.value)}><option value="expense">Despesa</option><option value="income">Receita</option></select></label>
@@ -227,10 +227,10 @@ function RecurringItem({entry,saving,onSave,onStop,trips}) {
       <label style={S.label}>Valor (R$)<input style={S.input} type="number" min="0.01" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)}/></label>
       <label style={S.label}>Data original / dia do vencimento<input style={S.input} type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></label>
       <label style={S.label}>Observações<textarea style={S.input} value={form.notes || ""} onChange={e=>set("notes",e.target.value)}/></label>
-      <p style={{fontSize:13,color:"#8a7a6a"}}>Altera o lançamento original e suas previsões ainda não confirmadas. O dia do vencimento é aplicado nos meses seguintes.</p>
+      <p style={{fontSize:13,color:"#aab9cb"}}>Altera o lançamento original e suas previsões ainda não confirmadas. O dia do vencimento é aplicado nos meses seguintes.</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving || !valid} onClick={async()=>{if(await onSave(form))setEditing(false);}}>{saving?"Salvando…":"Salvar alterações"}</button><button style={S.btn(false)} disabled={saving} onClick={()=>setEditing(false)}>Descartar alterações</button></div>
     </div>}
-    {confirm && <div style={{marginTop:16,padding:12,border:"1px solid #c87e7e",borderRadius:8}}><p style={{fontSize:14,marginBottom:12}}>Cancelar esta recorrência e remover suas previsões? O pagamento original será mantido.</p><div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving} onClick={()=>onStop(entry)}>Confirmar cancelamento</button><button style={S.btn(false)} disabled={saving} onClick={()=>setConfirm(false)}>Voltar</button></div></div>}
+    {confirm && <div style={{marginTop:16,padding:12,border:"1px solid #ff929b",borderRadius:8}}><p style={{fontSize:14,marginBottom:12}}>Cancelar esta recorrência e remover suas previsões? O pagamento original será mantido.</p><div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving} onClick={()=>onStop(entry)}>Confirmar cancelamento</button><button style={S.btn(false)} disabled={saving} onClick={()=>setConfirm(false)}>Voltar</button></div></div>}
   </div>;
 }
 
@@ -243,12 +243,12 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
   const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && !saving;
   return (
     <Modal show={show} onClose={onClose}>
-      <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#c8a97e",textTransform:"uppercase",letterSpacing:"0.07em" }}>
+      <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
         {isEdit?"Editar Lançamento":"Novo Lançamento"}
       </h2>
       <div style={{ display:"flex",gap:"0.5rem",marginBottom:"1rem" }}>
         {[["expense","Despesa"],["income","Receita"]].map(([t,l])=>(
-          <button key={t} onClick={()=>set("type",t)} style={{ flex:1,padding:"0.6rem",border:"1px solid",borderColor:form.type===t?"#c8a97e":"#3d342a",borderRadius:"8px",background:form.type===t?"rgba(200,169,126,0.15)":"transparent",color:form.type===t?"#c8a97e":"#8a7a6a",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>{l}</button>
+          <button key={t} onClick={()=>set("type",t)} style={{ flex:1,padding:"0.6rem",border:"1px solid",borderColor:form.type===t?"#75b8ff":"#35465c",borderRadius:"8px",background:form.type===t?"rgba(117,184,255,0.15)":"transparent",color:form.type===t?"#75b8ff":"#aab9cb",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>{l}</button>
         ))}
       </div>
       <div style={{ display:"flex",flexDirection:"column",gap:"0.8rem" }}>
@@ -273,11 +273,11 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
             <input type="date" value={form.date} onChange={e=>set("date",e.target.value)} style={S.input}/>
           </div>
         </div>
-        <label style={{ display:"flex",alignItems:"center",gap:"0.5rem",cursor:"pointer",color:"#8a7a6a",fontSize:"0.82rem" }}>
-          <input type="checkbox" disabled={form.bank==="Recorrência" || saving} checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#c8a97e" }}/>
+        <label style={{ display:"flex",alignItems:"center",gap:"0.5rem",cursor:"pointer",color:"#aab9cb",fontSize:"0.82rem" }}>
+          <input type="checkbox" disabled={form.bank==="Recorrência" || saving} checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#75b8ff" }}/>
           {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (aparece automaticamente nos meses seguintes)"}
         </label>
-        <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#c8a97e":"#2a2018",color:valid?"#0f0c0a":"#5a4a3a",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
+        <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#75b8ff":"#253244",color:valid?"#10151d":"#8fa2bb",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
           {saving?"Salvando…":isEdit?"Salvar Alterações":"Confirmar Lançamento"}
         </button>
       </div>
@@ -290,7 +290,7 @@ function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
   const [form, setForm] = useState({ category:"Alimentação", amount:"" });
   return (
     <Modal show={show} onClose={onClose} maxWidth={520}>
-      <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#c8a97e",textTransform:"uppercase",letterSpacing:"0.07em" }}>Orçamento por Categoria</h2>
+      <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>Orçamento por Categoria</h2>
       <div style={{ display:"grid",gridTemplateColumns:"1fr auto auto",gap:"0.5rem",marginBottom:"1.2rem",alignItems:"end" }}>
         <div>
           <label style={S.label}>Categoria</label>
@@ -302,16 +302,16 @@ function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
           <label style={S.label}>Limite (R$)</label>
           <input type="number" min="0" step="50" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="1500" style={{...S.input,width:"120px"}}/>
         </div>
-        <button onClick={()=>form.amount&&onSave(form.category,parseFloat(form.amount))} style={{ background:"#c8a97e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.65rem 1rem",fontWeight:"600",cursor:"pointer",fontSize:"0.85rem",marginTop:"0.3rem",whiteSpace:"nowrap" }}>+ Definir</button>
+        <button onClick={()=>form.amount&&onSave(form.category,parseFloat(form.amount))} style={{ background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.65rem 1rem",fontWeight:"600",cursor:"pointer",fontSize:"0.85rem",marginTop:"0.3rem",whiteSpace:"nowrap" }}>+ Definir</button>
       </div>
       <div>
-        {Object.entries(budgets).length===0 && <p style={{ color:"#5a4a3a",fontSize:"0.82rem",textAlign:"center",padding:"1rem" }}>Nenhum orçamento definido ainda.</p>}
+        {Object.entries(budgets).length===0 && <p style={{ color:"#8fa2bb",fontSize:"0.82rem",textAlign:"center",padding:"1rem" }}>Nenhum orçamento definido ainda.</p>}
         {Object.entries(budgets).map(([cat,lim])=>(
-          <div key={cat} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.6rem 0",borderBottom:"1px solid #2a2018" }}>
+          <div key={cat} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.6rem 0",borderBottom:"1px solid #253244" }}>
             <span style={{ fontSize:"0.85rem" }}>{cat}</span>
             <div style={{ display:"flex",alignItems:"center",gap:"0.8rem" }}>
-              <span style={{ color:"#c8a97e",fontSize:"0.85rem" }}>{fmt(lim)}</span>
-              <button onClick={()=>onDelete(cat)} style={{ background:"none",border:"none",color:"#5a4a3a",cursor:"pointer",padding:"2px" }}><Trash2 size={13}/></button>
+              <span style={{ color:"#75b8ff",fontSize:"0.85rem" }}>{fmt(lim)}</span>
+              <button onClick={()=>onDelete(cat)} style={{ background:"none",border:"none",color:"#8fa2bb",cursor:"pointer",padding:"2px" }}><Trash2 size={13}/></button>
             </div>
           </div>
         ))}
@@ -325,19 +325,19 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
   if (!show) return null;
   return (
     <Modal show={show} onClose={onClose} maxWidth={680}>
-      <h2 style={{ margin:"0 0 0.4rem",fontSize:"1rem",color:"#c8a97e",textTransform:"uppercase",letterSpacing:"0.07em" }}>
+      <h2 style={{ margin:"0 0 0.4rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
         Pré-visualização — {items.length} transações
       </h2>
-      <p style={{ fontSize:"0.75rem",color:"#5a4a3a",marginBottom:"1rem" }}>Ajuste as categorias antes de importar.</p>
+      <p style={{ fontSize:"0.75rem",color:"#8fa2bb",marginBottom:"1rem" }}>Ajuste as categorias antes de importar.</p>
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
         {items.map((e,i)=>(
-          <div key={i} style={{ display:"grid",gridTemplateColumns:"90px 1fr 130px 90px",gap:"6px",alignItems:"center",padding:"0.4rem 0",borderBottom:"1px solid #2a2018",fontSize:"0.78rem" }}>
-            <span style={{ color:"#8a7a6a" }}>{e.date}</span>
+          <div key={i} style={{ display:"grid",gridTemplateColumns:"90px 1fr 130px 90px",gap:"6px",alignItems:"center",padding:"0.4rem 0",borderBottom:"1px solid #253244",fontSize:"0.78rem" }}>
+            <span style={{ color:"#aab9cb" }}>{e.date}</span>
             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }} title={e.description}>{e.description}</span>
             <select value={e.category} onChange={ev=>onChange(i,"category",ev.target.value)} style={{ ...S.input,marginTop:0,padding:"0.25rem 0.4rem",fontSize:"0.75rem" }}>
               {[...new Set([...ALL_CATEGORIES,...items.map(e=>e.category)])].map(c=><option key={c}>{c}</option>)}
             </select>
-            <span style={{ color:e.type==="income"?"#7ec87e":"#c87e7e",textAlign:"right",fontWeight:"600" }}>
+            <span style={{ color:e.type==="income"?"#53d6a0":"#ff929b",textAlign:"right",fontWeight:"600" }}>
               {e.type==="income"?"+":"-"}{fmt(e.amount)}
             </span>
           </div>
@@ -345,7 +345,7 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
       </div>
       <div style={{ display:"flex",gap:"0.6rem" }}>
         <button onClick={onClose} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-        <button onClick={onConfirm} style={{ flex:2,background:"#c8a97e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
+        <button onClick={onConfirm} style={{ flex:2,background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
           Importar {items.length} lançamentos
         </button>
       </div>
@@ -619,22 +619,22 @@ function Finance() {
     const d = delta(curr, prev);
     if (!d) return null;
     return (
-      <span style={{ fontSize:"0.68rem", color:d.up?"#c87e7e":"#7ec87e", display:"flex", alignItems:"center", gap:2 }}>
+      <span style={{ fontSize:"0.68rem", color:d.up?"#ff929b":"#53d6a0", display:"flex", alignItems:"center", gap:2 }}>
         {d.up ? <ChevronUp size={10}/> : <ChevronDown size={10}/>} {Math.abs(d.val)}%
       </span>
     );
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0f0c0a", color:"#e8d8c0", fontFamily:"'Source Sans 3', sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#10151d", color:"#edf3fa", fontFamily:"'Source Sans 3', sans-serif" }}>
       <Toast msg={toast} onUndo={undoPayload ? ()=>saveSafely(undoPayload) : null}/>
 
       {/* ── HEADER ── */}
-      <div style={{ background:"#1a1612", borderBottom:"1px solid #3d342a", padding:"1.2rem 1.5rem" }}>
+      <div style={{ background:"#19222e", borderBottom:"1px solid #35465c", padding:"1.2rem 1.5rem" }}>
         <div style={{ maxWidth:"1100px", margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"0.8rem" }}>
           <div>
-            <h1 style={{ margin:0, fontSize:"1.4rem", color:"#c8a97e", fontFamily:"'Playfair Display', Georgia, serif" }}>Controle Financeiro</h1>
-            <p style={{ margin:0, fontSize:"0.72rem", color:"#8a7a6a", letterSpacing:"0.05em", textTransform:"uppercase" }}>Pessoal · {MONTHS[month]} {year}</p>
+            <h1 style={{ margin:0, fontSize:"1.4rem", color:"#75b8ff", fontFamily:"'Playfair Display', Georgia, serif" }}>Controle Financeiro</h1>
+            <p style={{ margin:0, fontSize:"0.72rem", color:"#aab9cb", letterSpacing:"0.05em", textTransform:"uppercase" }}>Pessoal · {MONTHS[month]} {year}</p>
           </div>
           <div style={{ display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap" }}>
             <select value={month} onChange={e=>setMonth(+e.target.value)} style={{ ...S.input, width:"auto", marginTop:0, padding:"0.4rem 0.7rem" }}>
@@ -642,26 +642,26 @@ function Finance() {
             </select>
             <input type="number" value={year} min="2000" max="2099" onChange={e=>setYear(+e.target.value)} style={{ ...S.input, width:"85px", marginTop:0, padding:"0.4rem 0.6rem" }}/>
 
-            <label title="Importar OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
+            <label title="Importar OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Upload size={14}/> Importar
               <input type="file" accept=".json,.ofx,.OFX,.csv" onChange={handleFileImport} style={{ display:"none" }}/>
             </label>
-            <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
+            <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar
             </button>
             <button onClick={()=>setShowTrips(true)} style={S.btn(false)}>Viagens</button>
             <button onClick={()=>setShowRecurring(true)} style={S.btn(false)}><RotateCcw size={14}/> Recorrentes</button>
-            <button onClick={()=>setShowBudgets(true)} style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
+            <button onClick={()=>setShowBudgets(true)} style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Wallet size={14}/> Orçamentos
             </button>
-            <button onClick={()=>setShowAdd(true)} style={{ display:"flex",alignItems:"center",gap:"0.4rem",background:"#c8a97e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.5rem 1rem",fontWeight:"600",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>
+            <button onClick={()=>setShowAdd(true)} style={{ display:"flex",alignItems:"center",gap:"0.4rem",background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.5rem 1rem",fontWeight:"600",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>
               <PlusCircle size={16}/> Lançar
             </button>
           </div>
         </div>
       </div>
 
-      <div role="status" style={{ maxWidth:1100, margin:"0 auto", padding:"0.8rem 1.5rem", color:syncError?"#c87e7e":"#7ec87e", fontSize:"0.85rem" }}>
+      <div role="status" style={{ maxWidth:1100, margin:"0 auto", padding:"0.8rem 1.5rem", color:syncError?"#ff929b":"#53d6a0", fontSize:"0.85rem" }}>
         {saving ? "Salvando no banco online…" : syncError || (lastSync ? `Sincronizado às ${lastSync.toLocaleTimeString("pt-BR")}` : "Conectando ao banco online…")}
         <button style={{...S.btn(false),marginLeft:12}} onClick={()=>{loadMonth();loadAll();loadBudgets();loadTrips();}}>Atualizar</button>
         {syncError && <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{ await request("setup",{method:"POST"}); await loadMonth(); await loadAll(); await loadBudgets(); })}>Preparar banco</button>}
@@ -678,30 +678,31 @@ function Finance() {
         <button style={{...S.btn(false),marginLeft:12}} onClick={()=>location.assign(location.pathname)}>Cancelar</button>
       </div>}
       {/* ── NAV ── */}
-      <div style={{ background:"#1a1612", borderBottom:"1px solid #3d342a" }}>
+      <div style={{ background:"#19222e", borderBottom:"1px solid #35465c" }}>
         <div style={{ maxWidth:"1100px", margin:"0 auto", display:"flex" }}>
           {[["dashboard","Dashboard"],["lancamentos","Lançamentos"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setView(v)} style={{ padding:"0.75rem 1.5rem",background:"none",border:"none",borderBottom:view===v?"2px solid #c8a97e":"2px solid transparent",color:view===v?"#c8a97e":"#8a7a6a",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>{l}</button>
+            <button key={v} onClick={()=>setView(v)} style={{ padding:"0.75rem 1.5rem",background:"none",border:"none",borderBottom:view===v?"2px solid #75b8ff":"2px solid transparent",color:view===v?"#75b8ff":"#aab9cb",cursor:"pointer",fontSize:"0.85rem",fontFamily:"'Source Sans 3',sans-serif" }}>{l}</button>
           ))}
         </div>
       </div>
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
 
+        <div role="status" style={{padding:"10px 14px",marginBottom:16,border:"1px solid #35465c",borderRadius:10,color:"#b6c4d6"}}>Tema de teste · Executivo grafite · A versão principal permanece com o visual original</div>
         {/* ── KPIs ── */}
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
           {[
-            { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#7ec87e" },
-            { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#c87e7e" },
-            { label:"Saldo",          value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#c8a97e":"#c87e7e" },
-            { label:"Taxa de Poupança", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#7ec87e":savingsRate>=0?"#c8a97e":"#c87e7e" },
+            { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
+            { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
+            { label:"Saldo",          value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
+            { label:"Taxa de Poupança", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
           ].map((k,i)=>(
             <div key={i} style={S.card}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.5rem" }}>
                 <span style={{ ...S.label, fontSize:"0.68rem" }}>{k.label}</span>
                 <span style={{ color:k.color }}>{k.icon}</span>
               </div>
-              <div style={{ fontSize:"1.15rem", fontWeight:"600", color:k.color, fontFamily:"'Playfair Display',serif" }}>
+              <div style={{ fontSize:"clamp(1.35rem, 4vw, 2rem)", fontWeight:"700", fontVariantNumeric:"tabular-nums", color:k.color, fontFamily:"'Source Sans 3',sans-serif" }}>
                 {k.display ?? fmt(k.value)}
               </div>
               {k.prev !== null && <DeltaBadge curr={k.value} prev={k.prev}/>}
@@ -713,9 +714,9 @@ function Finance() {
         {budgetAlerts.length > 0 && (
           <div style={{ marginBottom:"1.2rem", display:"flex", flexWrap:"wrap", gap:"0.6rem" }}>
             {budgetAlerts.map(b=>(
-              <div key={b.cat} style={{ display:"flex",alignItems:"center",gap:"0.5rem",background:b.ratio>=1?"rgba(200,126,126,0.12)":"rgba(200,200,126,0.1)",border:`1px solid ${b.ratio>=1?"#c87e7e":"#c8c87e"}`,borderRadius:"8px",padding:"0.5rem 0.8rem",fontSize:"0.78rem" }}>
-                <AlertTriangle size={13} color={b.ratio>=1?"#c87e7e":"#c8c87e"}/>
-                <span style={{ color:b.ratio>=1?"#c87e7e":"#c8c87e" }}>
+              <div key={b.cat} style={{ display:"flex",alignItems:"center",gap:"0.5rem",background:b.ratio>=1?"rgba(200,126,126,0.12)":"rgba(200,200,126,0.1)",border:`1px solid ${b.ratio>=1?"#ff929b":"#c8c87e"}`,borderRadius:"8px",padding:"0.5rem 0.8rem",fontSize:"0.78rem" }}>
+                <AlertTriangle size={13} color={b.ratio>=1?"#ff929b":"#c8c87e"}/>
+                <span style={{ color:b.ratio>=1?"#ff929b":"#c8c87e" }}>
                   {b.cat}: {fmt(b.spent)} / {fmt(b.lim)} ({(b.ratio*100).toFixed(0)}%)
                 </span>
               </div>
@@ -724,13 +725,13 @@ function Finance() {
         )}
 
         {/* ── LOADING ── */}
-        {loading && <div style={{ textAlign:"center", color:"#8a7a6a", padding:"3rem" }}>Carregando...</div>}
+        {loading && <div style={{ textAlign:"center", color:"#aab9cb", padding:"3rem" }}>Carregando...</div>}
 
         {/* ─────────────────── DASHBOARD ─────────────────── */}
         {!loading && view==="dashboard" && (
           <>
             {entries.length === 0 ? (
-              <div style={{ textAlign:"center",color:"#8a7a6a",padding:"4rem 2rem",border:"1px dashed #3d342a",borderRadius:"10px" }}>
+              <div style={{ textAlign:"center",color:"#aab9cb",padding:"4rem 2rem",border:"1px dashed #35465c",borderRadius:"10px" }}>
                 <BarChart3 size={44} style={{ margin:"0 auto 1rem",opacity:0.4 }}/>
                 <p style={{ fontSize:"1rem",marginBottom:"0.5rem" }}>Nenhum lançamento em {MONTHS[month]} {year}</p>
                 <p style={{ fontSize:"0.8rem",opacity:0.7 }}>Clique em "Lançar" para começar, ou importe um arquivo OFX/CSV/JSON.</p>
@@ -740,10 +741,10 @@ function Finance() {
                 {/* Biggest expense insight */}
                 {biggestExpense && (
                   <div style={{ ...S.card, marginBottom:"1.2rem", display:"flex", alignItems:"center", gap:"1rem", background:"rgba(200,126,126,0.07)", borderColor:"rgba(200,126,126,0.3)" }}>
-                    <TrendingDown size={20} color="#c87e7e" style={{ flexShrink:0 }}/>
+                    <TrendingDown size={20} color="#ff929b" style={{ flexShrink:0 }}/>
                     <div style={{minWidth:0,overflowWrap:"anywhere"}}>
-                      <span style={{ fontSize:"0.68rem", color:"#8a7a6a", textTransform:"uppercase", letterSpacing:"0.05em" }}>Maior despesa do mês</span>
-                      <div style={{ fontSize:"0.9rem" }}>{biggestExpense.description} <span style={{ color:"#5a4a3a" }}>· {biggestExpense.category}</span> <strong style={{ color:"#c87e7e" }}>{fmt(biggestExpense.amount)}</strong></div>
+                      <span style={{ fontSize:"0.68rem", color:"#aab9cb", textTransform:"uppercase", letterSpacing:"0.05em" }}>Maior despesa do mês</span>
+                      <div style={{ fontSize:"0.9rem" }}>{biggestExpense.description} <span style={{ color:"#8fa2bb" }}>· {biggestExpense.category}</span> <strong style={{ color:"#ff929b" }}>{fmt(biggestExpense.amount)}</strong></div>
                     </div>
                   </div>
                 )}
@@ -753,31 +754,22 @@ function Finance() {
                   {/* Pie */}
                   <div style={S.card}>
                     <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Despesas por categoria</p>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie onClick={data=>setDetailCategory(data.name)} style={{cursor:"pointer"}} data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" labelLine={false} label={false}>
-                          {pieData.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip/>}/>
-
-                      </PieChart>
-                    </ResponsiveContainer>
                     <ul className="category-legend" aria-label="Categorias de despesas">
-                      {pieData.map((item,i)=><li key={item.name} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${item.name}`} onClick={()=>setDetailCategory(item.name)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(item.name);}}} style={{cursor:"pointer"}}><span className="legend-dot" style={{background:COLORS[i%COLORS.length]}}/><span className="legend-name">{item.name}</span><span className="legend-amount">{fmt(item.value)}<small>{pct(item.value,totalExpense)}%</small></span></li>)}
+                      {pieData.map((item,i)=><li key={item.name} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${item.name}`} onClick={()=>setDetailCategory(item.name)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(item.name);}}} style={{cursor:"pointer"}}><span className="legend-dot" style={{background:COLORS[i%COLORS.length]}}/><span className="legend-name">{item.name}<span aria-hidden="true" style={{display:"block",height:6,background:"#253244",borderRadius:4,marginTop:8}}><span style={{display:"block",height:"100%",width:`${pct(item.value,totalExpense)}%`,background:COLORS[i%COLORS.length],borderRadius:4}}/></span></span><span className="legend-amount">{fmt(item.value)}<small>{pct(item.value,totalExpense)}%</small></span></li>)}
                     </ul>
                   </div>
 
                   {/* Bar */}
                   <div style={S.card}>
                     <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Receita vs Despesa por categoria</p>
-                    <div className="bar-key"><span><i style={{background:"#7ec87e"}}/>Receita</span><span><i style={{background:"#c87e7e"}}/>Despesa</span></div>
+                    <div className="bar-key"><span><i style={{background:"#53d6a0"}}/>Receita</span><span><i style={{background:"#ff929b"}}/>Despesa</span></div>
                     <ResponsiveContainer width="100%" height={Math.max(240,barData.length*52+40)}>
                       <BarChart data={barData} layout="vertical" margin={{ left:0, right:12, top:8, bottom:8 }}>
-                        <XAxis type="number" tick={{ fontSize:10,fill:"#8a7a6a" }} tickFormatter={v=>v>=1000?`${(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})}k`:`${v}`}/>
+                        <XAxis type="number" tick={{ fontSize:10,fill:"#aab9cb" }} tickFormatter={v=>v>=1000?`${(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})}k`:`${v}`}/>
                         <YAxis type="category" dataKey="name" width={125} interval={0} tick={<CategoryAxisTick/>}/>
                         <Tooltip content={<ChartTooltip/>}/>
-                        <Bar dataKey="Receita" fill="#7ec87e" radius={[0,3,3,0]}/>
-                        <Bar dataKey="Despesa" fill="#c87e7e" radius={[0,3,3,0]}/>
+                        <Bar dataKey="Receita" fill="#53d6a0" radius={[0,3,3,0]}/>
+                        <Bar dataKey="Despesa" fill="#ff929b" radius={[0,3,3,0]}/>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -788,19 +780,19 @@ function Finance() {
                   <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Tendência — últimos 6 meses</p>
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={trendData} margin={{ left:-10 }}>
-                      <XAxis dataKey="name" tick={{ fontSize:10,fill:"#8a7a6a" }}/>
-                      <YAxis tick={{ fontSize:9,fill:"#8a7a6a" }} width={55} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(0)}k`:`${v}`}/>
+                      <XAxis dataKey="name" tick={{ fontSize:10,fill:"#aab9cb" }}/>
+                      <YAxis tick={{ fontSize:9,fill:"#aab9cb" }} width={55} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(0)}k`:`${v}`}/>
                       <Tooltip content={<ChartTooltip/>}/>
-                      <Legend iconSize={8} wrapperStyle={{ fontSize:"0.72rem",color:"#8a7a6a" }}/>
-                      <Line type="monotone" dataKey="Receitas" stroke="#7ec87e" strokeWidth={2} dot={{ r:3 }}/>
-                      <Line type="monotone" dataKey="Despesas" stroke="#c87e7e" strokeWidth={2} dot={{ r:3 }}/>
+                      <Legend iconSize={8} wrapperStyle={{ fontSize:"0.72rem",color:"#aab9cb" }}/>
+                      <Line type="monotone" dataKey="Receitas" stroke="#53d6a0" strokeWidth={2} dot={{ r:3 }}/>
+                      <Line type="monotone" dataKey="Despesas" stroke="#ff929b" strokeWidth={2} dot={{ r:3 }}/>
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
 
                 {/* Category table */}
-                <div style={{ background:"#1a1612",border:"1px solid #3d342a",borderRadius:"10px",overflow:"hidden",marginBottom:"1.2rem" }}>
-                  <div style={{ padding:"0.8rem 1rem",borderBottom:"1px solid #2a2018" }}>
+                <div style={{ background:"#19222e",border:"1px solid #35465c",borderRadius:"10px",overflow:"hidden",marginBottom:"1.2rem" }}>
+                  <div style={{ padding:"0.8rem 1rem",borderBottom:"1px solid #253244" }}>
                     <p style={{ ...S.label, margin:0 }}>Resumo por categoria · {MONTHS[month]}</p>
                   </div>
                   {Object.entries(byCat).sort((a,b)=>b[1].expense-a[1].expense).map(([cat,v],i)=>{
@@ -808,24 +800,24 @@ function Finance() {
                     const budLim = budgets[cat];
                     const budRatio = budLim && v.expense>0 ? v.expense/budLim : null;
                     return (
-                      <div key={i} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${cat}`} onClick={()=>setDetailCategory(cat)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(cat);}}} style={{ cursor:"pointer",padding:"0.65rem 1rem",borderBottom:"1px solid #2a2018" }}>
+                      <div key={i} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${cat}`} onClick={()=>setDetailCategory(cat)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(cat);}}} style={{ cursor:"pointer",padding:"0.65rem 1rem",borderBottom:"1px solid #253244" }}>
                         <div className="category-summary" style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px" }}>
                           <div style={{ display:"flex",alignItems:"center",gap:"0.7rem" }}>
                             <div style={{ width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0 }}/>
                             <span style={{ fontSize:"0.85rem" }}>{cat}</span>
                           </div>
                           <div style={{ display:"flex",gap:"1rem",fontSize:"0.8rem",alignItems:"center" }}>
-                            {v.income>0 && <span style={{ color:"#7ec87e" }}>+{fmt(v.income)}</span>}
-                            {v.expense>0 && <span style={{ color:"#c87e7e" }}>-{fmt(v.expense)}</span>}
-                            {v.expense>0 && <span style={{ color:"#5a4a3a",fontSize:"0.7rem",minWidth:"3rem",textAlign:"right" }}>{pct(v.expense,totalExpense)}%</span>}
+                            {v.income>0 && <span style={{ color:"#53d6a0" }}>+{fmt(v.income)}</span>}
+                            {v.expense>0 && <span style={{ color:"#ff929b" }}>-{fmt(v.expense)}</span>}
+                            {v.expense>0 && <span style={{ color:"#8fa2bb",fontSize:"0.7rem",minWidth:"3rem",textAlign:"right" }}>{pct(v.expense,totalExpense)}%</span>}
                           </div>
                         </div>
                         {v.expense>0 && (
                           <div style={{ display:"flex",alignItems:"center",gap:"8px" }}>
-                            <div style={{ flex:1,height:"4px",background:"#2a2018",borderRadius:"2px",overflow:"hidden" }}>
+                            <div style={{ flex:1,height:"4px",background:"#253244",borderRadius:"2px",overflow:"hidden" }}>
                               <div style={{ height:"100%",width:`${Math.min(p*100,100)}%`,background:COLORS[i%COLORS.length],borderRadius:"2px" }}/>
                             </div>
-                            {budLim && <span style={{ fontSize:"0.68rem",color:budRatio>=1?"#c87e7e":budRatio>=0.8?"#c8c87e":"#5a4a3a",minWidth:"60px",textAlign:"right" }}>lim {fmt(budLim)}</span>}
+                            {budLim && <span style={{ fontSize:"0.68rem",color:budRatio>=1?"#ff929b":budRatio>=0.8?"#c8c87e":"#8fa2bb",minWidth:"60px",textAlign:"right" }}>lim {fmt(budLim)}</span>}
                           </div>
                         )}
                       </div>
@@ -850,41 +842,41 @@ function Finance() {
                 ))}
               </div>
               <div style={{ display:"flex",gap:"0.4rem",alignItems:"center" }}>
-                <ArrowUpDown size={13} color="#5a4a3a"/>
+                <ArrowUpDown size={13} color="#8fa2bb"/>
                 {[["date","Data"],["amount","Valor"],["category","Categoria"]].map(([s,l])=>(
                   <button key={s} onClick={()=>setSortBy(s)} style={S.btn(sortBy===s)}>{l}</button>
                 ))}
               </div>
             </div>
 
-            <div style={{ background:"#1a1612",border:"1px solid #3d342a",borderRadius:"10px",overflow:"hidden" }}>
+            <div style={{ background:"#19222e",border:"1px solid #35465c",borderRadius:"10px",overflow:"hidden" }}>
               {filtered.length===0 ? (
-                <div style={{ textAlign:"center",color:"#8a7a6a",padding:"3rem" }}>
+                <div style={{ textAlign:"center",color:"#aab9cb",padding:"3rem" }}>
                   {entries.length===0?"Sem lançamentos neste período.":"Nenhum resultado."}
                 </div>
               ) : (
                 filtered.map(e=>(
-                  <div key={e.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.8rem 1rem",borderBottom:"1px solid #2a2018",gap:"0.5rem" }}>
+                  <div key={e.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.8rem 1rem",borderBottom:"1px solid #253244",gap:"0.5rem" }}>
                     <div style={{ display:"flex",alignItems:"center",gap:"0.8rem",flex:1,minWidth:0 }}>
-                      <div style={{ width:8,height:8,borderRadius:"50%",background:e.type==="income"?"#7ec87e":"#c87e7e",flexShrink:0 }}/>
+                      <div style={{ width:8,height:8,borderRadius:"50%",background:e.type==="income"?"#53d6a0":"#ff929b",flexShrink:0 }}/>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
-                        <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
+                        <div style={{ fontSize:"0.7rem",color:"#aab9cb",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
-                          {travelDetails(e).destination && <span style={{color:"#c8a97e"}}>Viagem · {travelDetails(e).destination}</span>}
+                          {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
-                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
+                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
                         </div>
                       </div>
                     </div>
                     <div style={{ display:"flex",alignItems:"center",gap:"0.6rem",flexShrink:0 }}>
-                      <span style={{ color:e.type==="income"?"#7ec87e":"#c87e7e",fontWeight:"600",fontSize:"0.9rem" }}>
+                      <span style={{ color:e.type==="income"?"#53d6a0":"#ff929b",fontWeight:"600",fontSize:"0.9rem" }}>
                         {e.type==="income"?"+":"-"}{fmt(e.amount)}
                       </span>
-                      <button onClick={()=>setEditEntry(e)} title="Editar" aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#c8a97e",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
+                      <button onClick={()=>setEditEntry(e)} title="Editar" aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#75b8ff",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Pencil size={13}/>
                       </button>
-                      <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#8a7a6a",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
+                      <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#aab9cb",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Trash2 size={13}/>
                       </button>
                     </div>
@@ -893,7 +885,7 @@ function Finance() {
               )}
             </div>
             {entries.length>0 && (
-              <p style={{ fontSize:"0.72rem",color:"#5a4a3a",textAlign:"right",marginTop:"0.5rem" }}>
+              <p style={{ fontSize:"0.72rem",color:"#8fa2bb",textAlign:"right",marginTop:"0.5rem" }}>
                 {filtered.length} lançamento(s) · Despesas: {fmt(filtered.filter(e=>e.type==="expense").reduce((t,e)=>t+Number(e.amount),0))} · Receitas: {fmt(filtered.filter(e=>e.type==="income").reduce((t,e)=>t+Number(e.amount),0))}
               </p>
             )}
@@ -903,11 +895,11 @@ function Finance() {
 
       {/* ── MODALS ── */}
       <Modal show={showRecurring} onClose={()=>setShowRecurring(false)}>
-        <h2 style={{color:"#c8a97e",marginBottom:16}}>Lançamentos recorrentes</h2>
-        <p style={{color:"#8a7a6a",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
+        <h2 style={{color:"#75b8ff",marginBottom:16}}>Lançamentos recorrentes</h2>
+        <p style={{color:"#aab9cb",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").length===0 && <p>Marque um lançamento como recorrente ao criar ou editar.</p>}
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><RecurringItem key={e.id} entry={e} saving={saving} trips={knownTrips} onStop={entry=>saveSafely(()=>handleStopRecurring(entry))} onSave={form=>saveSafely(async()=>{const result=await api.editRecurring(form.id,form);await loadMonth();await loadAll();showToast(`Recorrência atualizada; ${result.forecasts} previsões ajustadas.`);})}/>)}
-        <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Use Editar informações para ajustar a série ou Cancelar recorrência para encerrar a repetição e remover suas previsões.</p>
+        <p style={{fontSize:13,color:"#aab9cb",margin:"16px 0"}}>Use Editar informações para ajustar a série ou Cancelar recorrência para encerrar a repetição e remover suas previsões.</p>
         <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já processados`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
       </Modal>
       <TripsModal show={showTrips} onClose={()=>setShowTrips(false)} trips={trips} entries={allEntries} saving={saving} onSave={trip=>saveSafely(async()=>{const saved=await api.addTrip(trip);setTrips(prev=>[...prev.filter(t=>t.destination!==saved.destination),saved].sort((a,b)=>a.destination.localeCompare(b.destination)));showToast("Destino cadastrado ✓");})}/>
@@ -918,13 +910,13 @@ function Finance() {
 
       <Modal show={detailCategory!==null} onClose={()=>setDetailCategory(null)} maxWidth={600}>
         <h2 style={{fontSize:"1.1rem",marginBottom:8,overflowWrap:"anywhere"}}>{detailCategory}</h2>
-        <p style={{color:"#b9a996",marginBottom:16}}>{MONTHS[month]} / {year} · {detailEntries.length} lançamento(s)</p>
+        <p style={{color:"#b6c4d6",marginBottom:16}}>{MONTHS[month]} / {year} · {detailEntries.length} lançamento(s)</p>
         <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense").reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
         <div style={{maxHeight:"55vh",overflowY:"auto"}}>
           {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
-          {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #3d342a",overflowWrap:"anywhere"}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#c87e7e":"#7ec87e"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
-            <p style={{color:"#b9a996",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
+          {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#ff929b":"#53d6a0"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
+            <p style={{color:"#b6c4d6",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
             <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
             <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(e);}}>Editar lançamento / observações</button>
           </article>)}
@@ -934,12 +926,12 @@ function Finance() {
 
       {/* Delete confirm */}
       <Modal show={!!delConfirm} onClose={()=>setDelConfirm(null)} maxWidth={380}>
-        <h2 style={{ margin:"0 0 0.8rem",fontSize:"1rem",color:"#c87e7e" }}>Confirmar exclusão</h2>
-        <p style={{ fontSize:"0.85rem",color:"#8a7a6a",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#e8d8c0" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
-        {(delConfirm?.recurring || delConfirm?.bank==="Recorrência") && <div style={{border:"1px solid #c8a97e",padding:12,borderRadius:8,marginBottom:16}}><p style={{fontSize:14,marginBottom:12}}>Se este gasto não deve se repetir, encerre a recorrência. Isso remove as previsões geradas dessa série e mantém o pagamento original.</p><button style={S.btn(true)} disabled={saving} onClick={()=>saveSafely(()=>handleStopRecurring(delConfirm))}>Encerrar recorrência e remover previsões</button></div>}
+        <h2 style={{ margin:"0 0 0.8rem",fontSize:"1rem",color:"#ff929b" }}>Confirmar exclusão</h2>
+        <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1.2rem" }}>Tem certeza que deseja excluir <strong style={{ color:"#edf3fa" }}>{delConfirm?.description}</strong>? Você poderá desfazer por 4 segundos.</p>
+        {(delConfirm?.recurring || delConfirm?.bank==="Recorrência") && <div style={{border:"1px solid #75b8ff",padding:12,borderRadius:8,marginBottom:16}}><p style={{fontSize:14,marginBottom:12}}>Se este gasto não deve se repetir, encerre a recorrência. Isso remove as previsões geradas dessa série e mantém o pagamento original.</p><button style={S.btn(true)} disabled={saving} onClick={()=>saveSafely(()=>handleStopRecurring(delConfirm))}>Encerrar recorrência e remover previsões</button></div>}
         <div style={{ display:"flex",gap:"0.6rem" }}>
           <button onClick={()=>setDelConfirm(null)} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-          <button disabled={saving} onClick={()=>saveSafely(()=>handleDelete(delConfirm))} style={{ flex:1,background:"#c87e7e",color:"#0f0c0a",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>{saving?"Salvando…":delConfirm?.bank==="Recorrência"?"Excluir só este mês":"Excluir lançamento"}</button>
+          <button disabled={saving} onClick={()=>saveSafely(()=>handleDelete(delConfirm))} style={{ flex:1,background:"#ff929b",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>{saving?"Salvando…":delConfirm?.bank==="Recorrência"?"Excluir só este mês":"Excluir lançamento"}</button>
         </div>
       </Modal>
 
@@ -964,7 +956,7 @@ export default function App() {
     catch(err) { setError(err.message); } finally { setBusy(false); }
   };
   if (ready) return <Finance/>;
-  return <main style={{minHeight:"100vh",background:"#0f0c0a",color:"#e8d8c0",display:"grid",placeItems:"center",padding:20,boxSizing:"border-box"}}>
+  return <main style={{minHeight:"100vh",background:"#10151d",color:"#edf3fa",display:"grid",placeItems:"center",padding:20,boxSizing:"border-box"}}>
     <form onSubmit={login} style={{...S.card,width:"100%",maxWidth:380}}>
       <h1>Controle Financeiro</h1><p>Entre com a mesma senha no computador e no celular.</p>
       <label htmlFor="password">Senha de acesso</label>
