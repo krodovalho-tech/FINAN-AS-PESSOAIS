@@ -1,5 +1,6 @@
 import "./responsive.css";
 import { api, request } from "./api.js";
+import { travelDetails } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { normalizeImport } from "./import.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -16,7 +17,7 @@ import {
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = [
   "Moradia","Alimentação","Alimentação — supermercado","Alimentação — bares, restaurantes e lanches","Rancho — ração de animais","Empréstimos concedidos","Locações — manutenção","Doações","Água, energia e gás","Telefone e internet","Transporte","Saúde","Educação",
-  "Lazer","Vestuário","Investimentos","Impostos","Cartão de Crédito","Outros"
+  "Lazer","Viagem","Vestuário","Investimentos","Impostos","Cartão de Crédito","Outros"
 ];
 const INCOME_CATEGORIES = [
   "Salário","Pró-labore","Dividendos","Aluguel","Freelance","Outros"
@@ -182,7 +183,35 @@ function CategoryAxisTick({x,y,payload}) {
   </text>;
 }
 
-function RecurringItem({entry,saving,onSave,onStop}) {
+function DestinationField({value, onChange, trips}) {
+  return <label style={S.label}>Viagem · destino (opcional)
+    <input aria-label="Destino da viagem" list="travel-destinations" value={value || ""} maxLength={160} onChange={e=>onChange(e.target.value)} placeholder="Escolha ou digite um destino" style={S.input}/>
+    <datalist id="travel-destinations">{trips.map(t=><option key={t.destination} value={t.destination}/>)}</datalist>
+    <small style={{display:"block",marginTop:6,textTransform:"none",letterSpacing:0}}>Marca o gasto como viagem e mantém sua categoria. Apague o destino para remover a marcação.</small>
+  </label>;
+}
+
+function TripsModal({show,onClose,trips,entries,onSave,saving}) {
+  const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState("");
+  useEffect(()=>{if(show){setDestination("");setStartDate("");}},[show]);
+  const totals={};
+  entries.filter(e=>e.type==="expense").forEach(e=>{const d=travelDetails(e).destination;if(d)totals[d]=(totals[d]||0)+Number(e.amount);});
+  const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
+  return <Modal show={show} onClose={onClose}>
+    <h2 style={{color:"#c8a97e",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
+    <p style={{color:"#8a7a6a",marginBottom:16}}>Cadastre o destino e selecione-o ao lançar ou editar uma despesa.</p>
+    <form onSubmit={async e=>{e.preventDefault();if(await onSave({destination:destination.trim(),start_date:startDate || null})){setDestination("");setStartDate("");}}} style={{display:"grid",gap:12}}>
+      <label style={S.label}>Destino<input aria-label="Novo destino" style={S.input} maxLength={160} placeholder="Cidade / UF" value={destination} onChange={e=>setDestination(e.target.value)} required/></label>
+      <label style={S.label}>Partida (opcional)<input aria-label="Data de partida" type="date" style={S.input} value={startDate} onChange={e=>setStartDate(e.target.value)}/></label>
+      <button style={S.btn(true)} disabled={saving || !destination.trim()} type="submit">{saving?"Salvando…":"Cadastrar destino"}</button>
+    </form>
+    <p style={{...S.label,marginTop:24,marginBottom:12}}>Despesas acumuladas por destino · todos os meses</p>
+    {!destinations.length && <p style={{color:"#8a7a6a"}}>Nenhum destino cadastrado.</p>}
+    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #3d342a",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#8a7a6a",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div></div>;})}
+  </Modal>;
+}
+
+function RecurringItem({entry,saving,onSave,onStop,trips}) {
   const [editing,setEditing]=useState(false),[confirm,setConfirm]=useState(false);
   const [form,setForm]=useState(()=>normalizeEntryForm(entry,today));
   const set=(key,value)=>setForm(f=>({...f,[key]:value}));
@@ -194,6 +223,7 @@ function RecurringItem({entry,saving,onSave,onStop}) {
       <label style={S.label}>Descrição<input style={S.input} value={form.description} onChange={e=>set("description",e.target.value)}/></label>
       <label style={S.label}>Tipo<select style={S.input} value={form.type} onChange={e=>set("type",e.target.value)}><option value="expense">Despesa</option><option value="income">Receita</option></select></label>
       <label style={S.label}>Categoria<select style={S.input} value={form.category} onChange={e=>set("category",e.target.value)}>{[...new Set([form.category,...ALL_CATEGORIES])].map(c=><option key={c}>{c}</option>)}</select></label>
+      <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
       <label style={S.label}>Valor (R$)<input style={S.input} type="number" min="0.01" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)}/></label>
       <label style={S.label}>Data original / dia do vencimento<input style={S.input} type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></label>
       <label style={S.label}>Observações<textarea style={S.input} value={form.notes || ""} onChange={e=>set("notes",e.target.value)}/></label>
@@ -205,7 +235,7 @@ function RecurringItem({entry,saving,onSave,onStop}) {
 }
 
 // ─── ENTRY FORM MODAL ────────────────────────────────────────────────────────
-function EntryModal({ show, onClose, onSave, initial, saving }) {
+function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(normalizeEntryForm(initial,today));
   useEffect(() => { setForm(normalizeEntryForm(initial,today)); },[initial,show]);
@@ -228,6 +258,7 @@ function EntryModal({ show, onClose, onSave, initial, saving }) {
             {[...new Set([form.category,...(form.type==="expense"?EXPENSE_CATEGORIES:INCOME_CATEGORIES)])].map(c=><option key={c}>{c}</option>)}
           </select>
         </div>
+        <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
         <div>
           <label style={S.label}>Descrição</label>
           <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Ex: Fatura Nubank março" style={S.input} onKeyDown={e=>e.key==="Enter"&&valid&&onSave(form)}/>
@@ -329,6 +360,9 @@ function Finance() {
   const [year, setYear]             = useState(now.getFullYear());
   const [entries, setEntries]       = useState([]);
   const [allEntries, setAllEntries] = useState([]);
+  const [trips,setTrips]=useState([]);
+  const [showTrips,setShowTrips]=useState(false);
+  const [filterDestination,setFilterDestination]=useState("");
   const [budgets, setBudgets]       = useState({});
   const [syncError, setSyncError] = useState("");
   const [lastSync, setLastSync] = useState(null);
@@ -383,16 +417,19 @@ function Finance() {
     } catch (err) { setSyncError(err.message); }
   }, []);
 
+  const loadTrips=useCallback(async()=>{try{setTrips(await api.getTrips());}catch(err){setSyncError(err.message);}},[]);
+  const knownTrips=useMemo(()=>[...new Set([...trips.map(t=>t.destination),...allEntries.map(e=>travelDetails(e).destination).filter(Boolean)])].map(destination=>({destination})),[trips,allEntries]);
+  useEffect(()=>{loadTrips();},[loadTrips]);
   useEffect(() => { loadMonth(); }, [loadMonth]);
   useEffect(() => { loadAll(); loadBudgets(); }, [loadAll, loadBudgets]);
 
   useEffect(() => {
-    const refresh = () => { if (!document.hidden && !savingRef.current) { loadMonth(); loadAll(); loadBudgets(); } };
+    const refresh = () => { if (!document.hidden && !savingRef.current) { loadMonth(); loadAll(); loadBudgets(); loadTrips(); } };
     const timer = setInterval(refresh, 30000);
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
-  }, [loadMonth, loadAll, loadBudgets]);
+  }, [loadMonth, loadAll, loadBudgets, loadTrips]);
 
   // ── Toast helper ──
   const showToast = (msg, undo=null) => {
@@ -462,10 +499,11 @@ function Finance() {
   // ── Filtered + sorted transactions ──
   const filtered = useMemo(() => {
     let list = [...entries];
+    if (filterDestination) list=list.filter(e=>travelDetails(e).destination===filterDestination);
     if (filterType!=="all") list = list.filter(e=>e.type===filterType);
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(e=>e.description.toLowerCase().includes(q)||e.category.toLowerCase().includes(q));
+      list = list.filter(e=>e.description.toLowerCase().includes(q)||e.category.toLowerCase().includes(q)||travelDetails(e).destination.toLowerCase().includes(q));
     }
     list.sort((a,b) => {
       if (sortBy==="date")   return new Date(b.date)-new Date(a.date);
@@ -474,7 +512,7 @@ function Finance() {
       return 0;
     });
     return list;
-  }, [entries, filterType, search, sortBy]);
+  }, [entries, filterType, search, sortBy, filterDestination]);
 
   // ── CRUD handlers ──
   const handleSave = async (form) => {
@@ -608,6 +646,7 @@ function Finance() {
             <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar
             </button>
+            <button onClick={()=>setShowTrips(true)} style={S.btn(false)}>Viagens</button>
             <button onClick={()=>setShowRecurring(true)} style={S.btn(false)}><RotateCcw size={14}/> Recorrentes</button>
             <button onClick={()=>setShowBudgets(true)} style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#2a2018",border:"1px solid #3d342a",borderRadius:"8px",cursor:"pointer",color:"#8a7a6a",fontSize:"0.8rem" }}>
               <Wallet size={14}/> Orçamentos
@@ -621,7 +660,7 @@ function Finance() {
 
       <div role="status" style={{ maxWidth:1100, margin:"0 auto", padding:"0.8rem 1.5rem", color:syncError?"#c87e7e":"#7ec87e", fontSize:"0.85rem" }}>
         {saving ? "Salvando no banco online…" : syncError || (lastSync ? `Sincronizado às ${lastSync.toLocaleTimeString("pt-BR")}` : "Conectando ao banco online…")}
-        <button style={{...S.btn(false),marginLeft:12}} onClick={()=>{loadMonth();loadAll();loadBudgets();}}>Atualizar</button>
+        <button style={{...S.btn(false),marginLeft:12}} onClick={()=>{loadMonth();loadAll();loadBudgets();loadTrips();}}>Atualizar</button>
         {syncError && <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{ await request("setup",{method:"POST"}); await loadMonth(); await loadAll(); await loadBudgets(); })}>Preparar banco</button>}
         <button style={{...S.btn(false),marginLeft:8}} onClick={()=>saveSafely(async()=>{await request("assistant?action=revoke",{method:"POST"});showToast("Conexões do assistente revogadas");})}>Desconectar assistente</button>
         <button style={{...S.btn(false),marginLeft:8}} onClick={()=>request("session",{method:"DELETE"}).then(()=>location.reload()).catch(err=>setSyncError(err.message))}>Sair</button>
@@ -800,7 +839,8 @@ function Finance() {
           <div>
             {/* Filter bar */}
             <div style={{ display:"flex",gap:"0.5rem",marginBottom:"0.8rem",flexWrap:"wrap",alignItems:"center" }}>
-              <input placeholder="Buscar por descrição ou categoria…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...S.input, marginTop:0, flex:1, minWidth:"200px" }}/>
+              <input placeholder="Buscar por descrição, categoria ou destino…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...S.input, marginTop:0, flex:1, minWidth:"200px" }}/>
+              <select aria-label="Filtrar por destino" style={{...S.input,marginTop:0,width:"auto",maxWidth:"100%"}} value={filterDestination} onChange={e=>setFilterDestination(e.target.value)}><option value="">Todos os destinos</option>{knownTrips.map(t=><option key={t.destination}>{t.destination}</option>)}</select>
               <div style={{ display:"flex",gap:"0.4rem" }}>
                 {[["all","Todos"],["expense","Despesas"],["income","Receitas"]].map(([t,l])=>(
                   <button key={t} onClick={()=>setFilterType(t)} style={S.btn(filterType===t)}>{l}</button>
@@ -828,6 +868,7 @@ function Finance() {
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
                         <div style={{ fontSize:"0.7rem",color:"#8a7a6a",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
+                          {travelDetails(e).destination && <span style={{color:"#c8a97e"}}>Viagem · {travelDetails(e).destination}</span>}
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
                           {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#c8a97e",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
                         </div>
@@ -850,7 +891,7 @@ function Finance() {
             </div>
             {entries.length>0 && (
               <p style={{ fontSize:"0.72rem",color:"#5a4a3a",textAlign:"right",marginTop:"0.5rem" }}>
-                {filtered.length} lançamento(s) · Despesas: {fmt(totalExpense)} · Receitas: {fmt(totalIncome)}
+                {filtered.length} lançamento(s) · Despesas: {fmt(filtered.filter(e=>e.type==="expense").reduce((t,e)=>t+Number(e.amount),0))} · Receitas: {fmt(filtered.filter(e=>e.type==="income").reduce((t,e)=>t+Number(e.amount),0))}
               </p>
             )}
           </div>
@@ -862,12 +903,13 @@ function Finance() {
         <h2 style={{color:"#c8a97e",marginBottom:16}}>Lançamentos recorrentes</h2>
         <p style={{color:"#8a7a6a",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
         {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").length===0 && <p>Marque um lançamento como recorrente ao criar ou editar.</p>}
-        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><RecurringItem key={e.id} entry={e} saving={saving} onStop={entry=>saveSafely(()=>handleStopRecurring(entry))} onSave={form=>saveSafely(async()=>{const result=await api.editRecurring(form.id,form);await loadMonth();await loadAll();showToast(`Recorrência atualizada; ${result.forecasts} previsões ajustadas.`);})}/>)}
+        {allEntries.filter(e=>e.recurring && e.bank!=="Recorrência").map(e=><RecurringItem key={e.id} entry={e} saving={saving} trips={knownTrips} onStop={entry=>saveSafely(()=>handleStopRecurring(entry))} onSave={form=>saveSafely(async()=>{const result=await api.editRecurring(form.id,form);await loadMonth();await loadAll();showToast(`Recorrência atualizada; ${result.forecasts} previsões ajustadas.`);})}/>)}
         <p style={{fontSize:13,color:"#8a7a6a",margin:"16px 0"}}>Use Editar informações para ajustar a série ou Cancelar recorrência para encerrar a repetição e remover suas previsões.</p>
         <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já processados`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
       </Modal>
-      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving}/>
-      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving}/>
+      <TripsModal show={showTrips} onClose={()=>setShowTrips(false)} trips={trips} entries={allEntries} saving={saving} onSave={trip=>saveSafely(async()=>{const saved=await api.addTrip(trip);setTrips(prev=>[...prev.filter(t=>t.destination!==saved.destination),saved].sort((a,b)=>a.destination.localeCompare(b.destination)));showToast("Destino cadastrado ✓");})}/>
+      <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving} trips={knownTrips}/>
+      <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving} trips={knownTrips}/>
 
       <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={(cat,amt)=>saveSafely(()=>handleBudgetSave(cat,amt))} onDelete={cat=>saveSafely(()=>handleBudgetDelete(cat))} budgets={budgets}/>
 
@@ -913,3 +955,4 @@ export default function App() {
     </form>
   </main>;
 }
+
