@@ -67,11 +67,28 @@ export default async function handler(req, res) {
       const { type, category, description, amount, date, recurring, notes } = req.body || {};
       if (!validEntry(req.body)) return res.status(400).json({ error: 'Confira descrição, categoria, valor positivo e data válida.' });
       const { rows } = await sql`
+        WITH previous AS MATERIALIZED (
+          SELECT id, recurring, bank FROM entries WHERE id=${parseInt(id, 10)} FOR UPDATE
+        ), updated AS (
         UPDATE entries
         SET type=${type}, category=${category}, description=${description},
             amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}, notes=${notes||null}
-        WHERE id=${parseInt(id, 10)}
-        RETURNING *
+        FROM previous
+        WHERE entries.id=previous.id
+        RETURNING entries.*
+        ), reactivated AS (
+          DELETE FROM recurrence_occurrences occurrence
+          USING previous, updated
+          WHERE previous.recurring IS NOT TRUE AND updated.recurring=TRUE
+            AND previous.bank IS DISTINCT FROM 'Recorrência'
+            AND occurrence.source_id LIKE (previous.id::text || ':%')
+            AND split_part(occurrence.source_id, ':', 2) > to_char(updated.date, 'YYYY-MM-01')
+            AND NOT EXISTS (
+              SELECT 1 FROM entries forecast
+              WHERE forecast.bank='Recorrência' AND forecast.source_id=occurrence.source_id
+            )
+          RETURNING occurrence.source_id
+        ) SELECT * FROM updated
       `;
       if (!rows.length) return res.status(404).json({ error: 'Lançamento não encontrado' });
       return res.status(200).json(normalizeRows(rows)[0]);
@@ -113,4 +130,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Não foi possível acessar o banco. Verifique a conexão e a configuração das tabelas.' });
   }
 }
+
 
