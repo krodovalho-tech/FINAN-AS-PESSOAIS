@@ -25,3 +25,26 @@ test('sem token ou valores inválidos não há confirmação de gravação',asyn
  globalThis.assistantSql=async()=>({rows:[{id:1}]});
  const invalid=await call('record',{type:'expense',amount:-1},'D'.repeat(43));assert.equal(invalid.statusCode,400);assert.equal(invalid.data.saved,undefined);
 });
+
+
+test('edição altera o registro consultado, preserva metadados e rejeita conflito',async()=>{
+ const entry={id:2217,type:'expense',category:'Alimentação',description:'Churros',amount:10,date:'2026-10-08'};
+ let updates=0;
+ globalThis.assistantSql=async(strings,...v)=>{const q=strings.join('');if(q.startsWith('SELECT id FROM assistant'))return {rows:[{id:1}]};if(q.startsWith('UPDATE entries')){updates++;assert.ok(!q.includes('bank='));assert.ok(!q.includes('recurring='));return {rows:[{...entry,category:v[1]}]};}return {rows:[entry]};};
+ const body={id:entry.id,expected:{type:entry.type,category:entry.category,description:entry.description,amount:entry.amount,date:entry.date},changes:{category:'Alimentação — bares, restaurantes e lanches'}};
+ const result=await call('edit',body,'D'.repeat(43));assert.equal(result.statusCode,200);assert.equal(result.data.saved,true);assert.equal(result.data.entry.id,2217);assert.equal(updates,1);
+ globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:strings.join('').startsWith('UPDATE entries')?[]:[{...entry,amount:11}]});
+ assert.equal((await call('edit',body,'D'.repeat(43))).statusCode,409);
+ assert.equal((await call('edit',{...body,changes:{amount:-1}},'D'.repeat(43))).statusCode,400);
+ assert.equal((await call('edit',{...body,changes:{date:'2026-02-30'}},'D'.repeat(43))).statusCode,400);
+ assert.equal((await call('edit',{...body,changes:{bank:'Outro'}},'D'.repeat(43))).statusCode,400);
+ assert.equal((await call('edit',body)).statusCode,401);
+});
+test('edição repetida é idempotente e registro ausente retorna 404',async()=>{
+ const expected={type:'expense',category:'Alimentação',description:'Churros',amount:10,date:'2026-10-08'};
+ const body={id:2217,expected,changes:{category:'Lanches'}};
+ globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:strings.join('').startsWith('UPDATE entries')?[]:[{id:2217,...expected,category:'Lanches',date:new Date('2026-10-08')}]});
+ const repeat=await call('edit',body,'D'.repeat(43));assert.equal(repeat.statusCode,200);assert.equal(repeat.data.unchanged,true);
+ globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:[]});
+ assert.equal((await call('edit',body,'D'.repeat(43))).statusCode,404);
+});
