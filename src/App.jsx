@@ -377,6 +377,7 @@ function Finance() {
   const [undoPayload, setUndoPayload] = useState(null);
   const [showAdd, setShowAdd]       = useState(false);
   const [editEntry, setEditEntry]   = useState(null);
+  const [detailCategory, setDetailCategory] = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [showRecurring, setShowRecurring] = useState(false);
   const [showBudgets, setShowBudgets] = useState(false);
@@ -486,6 +487,8 @@ function Finance() {
 
   const pieData = Object.entries(byCat).filter(([,v])=>v.expense>0).map(([name,v])=>({ name, value:v.expense })).sort((a,b)=>b.value-a.value);
   const barData = Object.entries(byCat).map(([name,v])=>({ name, Receita:v.income, Despesa:v.expense })).sort((a,b)=>b.Despesa-a.Despesa);
+
+  const detailEntries = entries.filter(e=>e.category===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 
   // Budget alerts
   const budgetAlerts = useMemo(() => Object.entries(budgets).map(([cat,lim])=>{ const spent=byCat[cat]?.expense||0; const ratio=spent/lim; return { cat, lim, spent, ratio }; }).filter(b=>b.ratio>=0.7).sort((a,b)=>b.ratio-a.ratio), [budgets,byCat]);
@@ -752,7 +755,7 @@ function Finance() {
                     <p style={{ ...S.label, margin:"0 0 0.8rem" }}>Despesas por categoria</p>
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" labelLine={false} label={false}>
+                        <Pie onClick={data=>setDetailCategory(data.name)} style={{cursor:"pointer"}} data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" labelLine={false} label={false}>
                           {pieData.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
                         </Pie>
                         <Tooltip content={<ChartTooltip/>}/>
@@ -760,7 +763,7 @@ function Finance() {
                       </PieChart>
                     </ResponsiveContainer>
                     <ul className="category-legend" aria-label="Categorias de despesas">
-                      {pieData.map((item,i)=><li key={item.name}><span className="legend-dot" style={{background:COLORS[i%COLORS.length]}}/><span className="legend-name">{item.name}</span><span className="legend-amount">{fmt(item.value)}<small>{pct(item.value,totalExpense)}%</small></span></li>)}
+                      {pieData.map((item,i)=><li key={item.name} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${item.name}`} onClick={()=>setDetailCategory(item.name)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(item.name);}}} style={{cursor:"pointer"}}><span className="legend-dot" style={{background:COLORS[i%COLORS.length]}}/><span className="legend-name">{item.name}</span><span className="legend-amount">{fmt(item.value)}<small>{pct(item.value,totalExpense)}%</small></span></li>)}
                     </ul>
                   </div>
 
@@ -805,7 +808,7 @@ function Finance() {
                     const budLim = budgets[cat];
                     const budRatio = budLim && v.expense>0 ? v.expense/budLim : null;
                     return (
-                      <div key={i} style={{ padding:"0.65rem 1rem",borderBottom:"1px solid #2a2018" }}>
+                      <div key={i} role="button" tabIndex={0} aria-label={`Ver lançamentos de ${cat}`} onClick={()=>setDetailCategory(cat)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setDetailCategory(cat);}}} style={{ cursor:"pointer",padding:"0.65rem 1rem",borderBottom:"1px solid #2a2018" }}>
                         <div className="category-summary" style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px" }}>
                           <div style={{ display:"flex",alignItems:"center",gap:"0.7rem" }}>
                             <div style={{ width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0 }}/>
@@ -912,6 +915,22 @@ function Finance() {
       <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving} trips={knownTrips}/>
 
       <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={(cat,amt)=>saveSafely(()=>handleBudgetSave(cat,amt))} onDelete={cat=>saveSafely(()=>handleBudgetDelete(cat))} budgets={budgets}/>
+
+      <Modal show={detailCategory!==null} onClose={()=>setDetailCategory(null)} maxWidth={600}>
+        <h2 style={{fontSize:"1.1rem",marginBottom:8,overflowWrap:"anywhere"}}>{detailCategory}</h2>
+        <p style={{color:"#b9a996",marginBottom:16}}>{MONTHS[month]} / {year} · {detailEntries.length} lançamento(s)</p>
+        <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense").reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
+        <div style={{maxHeight:"55vh",overflowY:"auto"}}>
+          {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
+          {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #3d342a",overflowWrap:"anywhere"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#c87e7e":"#7ec87e"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
+            <p style={{color:"#b9a996",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
+            <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(e);}}>Editar lançamento / observações</button>
+          </article>)}
+        </div>
+        <button style={{...S.btn(false),marginTop:16}} onClick={()=>setDetailCategory(null)}>Fechar</button>
+      </Modal>
 
       {/* Delete confirm */}
       <Modal show={!!delConfirm} onClose={()=>setDelConfirm(null)} maxWidth={380}>
