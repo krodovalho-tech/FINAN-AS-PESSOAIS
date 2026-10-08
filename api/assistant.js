@@ -42,6 +42,37 @@ export default async function handler(req,res) {
       for(const e of rows){const cents=Math.round(Number(e.amount)*100);if(e.type==='income')income+=cents;else{expense+=cents;categories[e.category]=(categories[e.category]||0)+cents;}}
       return res.status(200).json({year,month,count:rows.length,income:income/100,expense:expense/100,balance:(income-expense)/100,expensesByCategory:Object.entries(categories).map(([category,cents])=>({category,amount:cents/100})).sort((a,b)=>b.amount-a.amount),largestExpenses:rows.filter(e=>e.type==='expense').slice(0,5)});
     }
+
+    if (action==='entries' && req.method==='GET') {
+      const id=Number(req.query.id),year=Number(req.query.year),month=Number(req.query.month);
+      if (req.query.id!==undefined) {
+        if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:'Identificador inválido.'});
+        const {rows}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE id=${id}`;
+        return res.status(200).json({entries:rows});
+      }
+      if(!Number.isInteger(year)||year<2000||year>2200||!Number.isInteger(month)||month<1||month>12) return res.status(400).json({error:'Informe mês e ano válidos.'});
+      const search=req.query.search || '';
+      if(typeof search!=='string'||search.length>1000) return res.status(400).json({error:'Busca inválida.'});
+      const {rows}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE EXTRACT(YEAR FROM date)=${year} AND EXTRACT(MONTH FROM date)=${month} AND (${search}='' OR POSITION(LOWER(${search}) IN LOWER(description))>0) ORDER BY date DESC,id DESC LIMIT 100`;
+      return res.status(200).json({entries:rows,limit:100});
+    }
+    if (action==='edit' && req.method==='POST') {
+      const {id,expected,changes}=req.body || {};
+      const fields=['type','category','description','amount','date'];
+      const dateText=d=>d instanceof Date?d.toISOString().slice(0,10):String(d).slice(0,10);
+      const valid=e=>e && ['income','expense'].includes(e.type) && typeof e.category==='string' && !!e.category.trim() && e.category.length<=60 && typeof e.description==='string' && !!e.description.trim() && e.description.length<=1000 && Number.isFinite(Number(e.amount)) && Math.round(Number(e.amount)*100)>0 && Number(e.amount)<=9999999999.99 && typeof e.date==='string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && !Number.isNaN(Date.parse(e.date+'T12:00:00Z')) && new Date(e.date+'T12:00:00Z').toISOString().slice(0,10)===e.date;
+      if(!Number.isSafeInteger(id)||id<1||!valid(expected)||!changes||typeof changes!=='object'||Array.isArray(changes)||!Object.keys(changes).length||Object.keys(changes).some(k=>!fields.includes(k))) return res.status(400).json({error:'Confira o identificador, os dados consultados e os campos a alterar.'});
+      const next={...expected,...changes};
+      if(!valid(next)) return res.status(400).json({error:'Confira valor positivo, categoria, descrição e data válida.'});
+      next.amount=Math.round(Number(next.amount)*100)/100;
+      const {rows}=await sql`UPDATE entries SET type=${next.type},category=${next.category},description=${next.description},amount=${next.amount},date=${next.date} WHERE id=${id} AND type=${expected.type} AND category=${expected.category} AND description=${expected.description} AND amount=${Number(expected.amount)} AND date=${expected.date} RETURNING id,type,category,description,amount,date`;
+      if(rows.length) return res.status(200).json({saved:true,entry:rows[0]});
+      const {rows:existing}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE id=${id}`;
+      if(!existing.length) return res.status(404).json({error:'Lançamento não encontrado.'});
+      const e=existing[0];
+      if(e.type===next.type && e.category===next.category && e.description===next.description && Number(e.amount)===next.amount && dateText(e.date)===next.date) return res.status(200).json({saved:true,unchanged:true,entry:e});
+      return res.status(409).json({error:'O lançamento mudou desde a consulta. Consulte novamente antes de editar.'});
+    }
     if (action==='record' && req.method==='POST') {
       const e=req.body || {};const amount=Number(e.amount);
       if(!['income','expense'].includes(e.type)||!Number.isFinite(amount)||amount<=0||amount>9999999999.99||!/^\d{4}-\d{2}-\d{2}$/.test(e.date||'')||typeof e.description!=='string'||!e.description.trim()||e.description.length>1000||typeof e.category!=='string'||!e.category.trim()||e.category.length>60||! /^[A-Za-z0-9_-]{8,100}$/.test(e.request_id||'')) return res.status(400).json({error:'Lançamento inválido. Confira valor, data, descrição, categoria e identificador.'});
@@ -57,3 +88,4 @@ export default async function handler(req,res) {
     return res.status(405).json({error:'Operação não permitida.'});
   } catch(err) {console.error('assistant',err.code || err.name);return res.status(500).json({error:'Não foi possível acessar o banco. Nenhuma confirmação de gravação disponível.'});}
 }
+
