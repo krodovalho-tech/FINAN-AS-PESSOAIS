@@ -192,23 +192,78 @@ function DestinationField({value, onChange, trips}) {
   </label>;
 }
 
+function travelCategory(entry) {
+  const category = String(entry.category || "").trim();
+  if (category && !/^viagem$/i.test(category)) return category;
+  const description = String(entry.description || "").toLowerCase();
+  if (/hospedagem|hotel|pousada|diária/.test(description)) return "Hospedagem";
+  if (/combustível|abastecimento|gasolina|etanol|diesel/.test(description)) return "Combustível";
+  if (/alimentação|almoço|jantar|lanche|restaurante|churros|café da manhã/.test(description)) return "Alimentação e lanches";
+  if (/presente|brinde|mimo|lembrancinha/.test(description)) return "Presentes e mimos";
+  if (/entrada|ingresso|passeio|complexo novo banho|parque/.test(description)) return "Passeios";
+  return "Outros / a classificar";
+}
+
 function TripsModal({show,onClose,trips,entries,onSave,saving}) {
   const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState(""),[selectedTrip,setSelectedTrip]=useState(""),[selectedCategory,setSelectedCategory]=useState("");
   useEffect(()=>{if(show){setDestination("");setStartDate("");setSelectedTrip("");setSelectedCategory("");}},[show]);
-  const totals={},breakdown={};
-  purchaseCosts(entries).forEach(e=>{const d=travelDetails(e).destination;if(!d)return;const amount=Number(e.amount);totals[d]=(totals[d]||0)+amount;const category=e.category || "Sem categoria";breakdown[d] ||= {};breakdown[d][category]=(breakdown[d][category]||0)+amount;});
-  const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
+  const grouped={};
+  purchaseCosts(entries).forEach(entry=>{
+    const d=travelDetails(entry).destination;
+    if (!d) return;
+    const amount=Number(entry.amount);
+    if (!Number.isFinite(amount)) return;
+    const group=grouped[d] ||= {total:0,categories:{}};
+    const category=travelCategory(entry);
+    group.total+=amount;
+    (group.categories[category] ||= []).push(entry);
+  });
+  const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(grouped)])].filter(Boolean);
+  const preferred=["Hospedagem","Combustível","Alimentação e lanches","Presentes e mimos","Passeios","Outros / a classificar"];
   return <Modal show={show} onClose={onClose}>
     <h2 style={{color:"#75b8ff",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
-    <p style={{color:"#aab9cb",marginBottom:16}}>Cadastre o destino e selecione-o ao lançar ou editar uma despesa.</p>
+    <p style={{color:"#aab9cb",marginBottom:16}}>Dashboard por destino e natureza da despesa. Toque na categoria para consultar os lançamentos.</p>
     <form onSubmit={async e=>{e.preventDefault();if(await onSave({destination:destination.trim(),start_date:startDate || null})){setDestination("");setStartDate("");}}} style={{display:"grid",gap:12}}>
       <label style={S.label}>Destino<input aria-label="Novo destino" style={S.input} maxLength={160} placeholder="Cidade / UF" value={destination} onChange={e=>setDestination(e.target.value)} required/></label>
       <label style={S.label}>Partida (opcional)<input aria-label="Data de partida" type="date" style={S.input} value={startDate} onChange={e=>setStartDate(e.target.value)}/></label>
       <button style={S.btn(true)} disabled={saving || !destination.trim()} type="submit">{saving?"Salvando…":"Cadastrar destino"}</button>
     </form>
-    <p style={{...S.label,marginTop:24,marginBottom:12}}>Custo total por destino · compras completas, incluindo parcelas futuras</p>
+    <p style={{...S.label,marginTop:24,marginBottom:12}}>Custo integral por viagem · sem duplicar parcelas</p>
     {!destinations.length && <p style={{color:"#aab9cb"}}>Nenhum destino cadastrado.</p>}
-    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);const categories=Object.entries(breakdown[d] || {}).sort((a,b)=>b[1]-a[1]);const open=selectedTrip===d;return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><button type="button" onClick={()=>{setSelectedTrip(open?"":d);setSelectedCategory("");}} style={{...S.btn(false),width:"100%",textAlign:"left",display:"flex",justifyContent:"space-between",gap:12}}><strong>{d}</strong><strong>{fmt(totals[d] || 0)}</strong></button><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Clique para detalhar a viagem</div>{open && categories.length>0 && <div style={{display:"grid",gap:6,marginTop:10}}>{categories.map(([category,amount])=>{const categoryOpen=selectedCategory===category;const items=purchaseCosts(entries).filter(e=>travelDetails(e).destination===d && (e.category || "Sem categoria")===category).sort((a,b)=>String(b.date).localeCompare(String(a.date)));return <div key={category}><button type="button" onClick={()=>setSelectedCategory(categoryOpen?"":category)} style={{...S.btn(false),width:"100%",display:"flex",justifyContent:"space-between",gap:12,textAlign:"left"}}><span>{category}</span><strong>{fmt(amount)}</strong></button>{categoryOpen && <div style={{margin:"6px 4px 10px 12px",borderLeft:"2px solid #35465c",paddingLeft:10}}>{items.map((e,i)=><div key={e.id || e.source_id || i} style={{padding:"7px 0",borderBottom:"1px solid #263548",fontSize:".85rem"}}><div>{e.description}</div><div style={{color:"#aab9cb",marginTop:2}}>{new Date(String(e.date).slice(0,10)+"T12:00:00").toLocaleDateString("pt-BR")} · {fmt(e.amount)}</div></div>)}</div>}</div>;})}</div>}</div>;})}
+    {destinations.map(d=>{
+      const group=grouped[d] || {total:0,categories:{}};
+      const trip=trips.find(t=>t.destination===d);
+      const open=selectedTrip===d;
+      const categories=[...new Set([...preferred,...Object.keys(group.categories)])];
+      return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
+        <button type="button" onClick={()=>{setSelectedTrip(open?"":d);setSelectedCategory("");}} style={{...S.btn(false),width:"100%",textAlign:"left",display:"flex",justifyContent:"space-between",gap:12}}>
+          <strong>{d}</strong><strong>{fmt(group.total)}</strong>
+        </button>
+        <div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Clique para detalhar a viagem</div>
+        {open && <div style={{display:"grid",gap:10,marginTop:12}}>
+          <div style={{color:"#75b8ff",fontWeight:700,fontSize:"1.15rem"}}>Total da viagem: {fmt(group.total)}</div>
+          {categories.map(category=>{
+            const items=(group.categories[category] || []).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+            const amount=items.reduce((sum,e)=>sum+Number(e.amount),0);
+            const categoryOpen=selectedCategory===category;
+            return <div key={category}>
+              <button type="button" onClick={()=>setSelectedCategory(categoryOpen?"":category)} style={{...S.btn(false),width:"100%",textAlign:"left",display:"grid",gap:7}}>
+                <span style={{display:"flex",justifyContent:"space-between",gap:10}}><strong>{category}</strong><strong>{fmt(amount)}</strong></span>
+                <span style={{height:7,borderRadius:9,background:"#263548",overflow:"hidden",display:"block"}}><span style={{display:"block",height:"100%",width:`${group.total>0?Math.max(0,Math.min(100,amount/group.total*100)):0}%`,background:"#75b8ff",borderRadius:9}}/></span>
+              </button>
+              {categoryOpen && <div style={{margin:"6px 4px 10px 12px",borderLeft:"2px solid #35465c",paddingLeft:10}}>
+                {!items.length && <p style={{color:"#aab9cb"}}>Nenhum lançamento nesta categoria.</p>}
+                {items.map((e,i)=><div key={e.id || e.source_id || i} style={{padding:"7px 0",borderBottom:"1px solid #263548",fontSize:".85rem"}}>
+                  <div>{e.description}</div>
+                  <div style={{color:"#aab9cb",marginTop:2}}>{new Date(String(e.date).slice(0,10)+"T12:00:00").toLocaleDateString("pt-BR")} · {fmt(e.amount)}</div>
+                </div>)}
+              </div>}
+            </div>;
+          })}
+          <small style={{color:"#aab9cb"}}>Categorias inferidas pela descrição aparecem apenas nesta visualização. Revise “Outros / a classificar” antes de alterar lançamentos.</small>
+        </div>}
+      </div>;
+    })}
   </Modal>;
 }
 
