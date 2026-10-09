@@ -17,6 +17,7 @@ export const api = {
   editRecurring:(id,entry)=>send('recurring','POST',{action:'edit',id,entry:travelPayload(entry)}),
   getTrips:()=>request('trips'),
   addTrip:trip=>send('trips','POST',trip),
+  deleteTrip:id=>request(`trips?id=${encodeURIComponent(id)}`,{method:'DELETE'}),
   stopRecurring:id=>send('recurring','POST',{action:'stop',id}),
   applyRecurring:(month,year)=>send('recurring','POST',{month,year}),
   getBudgets:()=>request('budgets'),
