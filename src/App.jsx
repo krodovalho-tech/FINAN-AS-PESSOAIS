@@ -195,8 +195,8 @@ function DestinationField({value, onChange, trips}) {
 function TripsModal({show,onClose,trips,entries,onSave,saving}) {
   const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState("");
   useEffect(()=>{if(show){setDestination("");setStartDate("");}},[show]);
-  const totals={};
-  purchaseCosts(entries).forEach(e=>{const d=travelDetails(e).destination;if(d)totals[d]=(totals[d]||0)+Number(e.amount);});
+  const totals={},breakdown={};
+  purchaseCosts(entries).forEach(e=>{const d=travelDetails(e).destination;if(!d)return;const amount=Number(e.amount);totals[d]=(totals[d]||0)+amount;const category=e.category || "Sem categoria";breakdown[d] ||= {};breakdown[d][category]=(breakdown[d][category]||0)+amount;});
   const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
   return <Modal show={show} onClose={onClose}>
     <h2 style={{color:"#75b8ff",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
@@ -208,7 +208,7 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
     </form>
     <p style={{...S.label,marginTop:24,marginBottom:12}}>Custo total por destino · compras completas, incluindo parcelas futuras</p>
     {!destinations.length && <p style={{color:"#aab9cb"}}>Nenhum destino cadastrado.</p>}
-    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div></div>;})}
+    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);const categories=Object.entries(breakdown[d] || {}).sort((a,b)=>b[1]-a[1]);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div>{categories.length>0 && <div style={{display:"grid",gap:4,marginTop:8}}>{categories.map(([category,amount])=><div key={category} style={{display:"flex",justifyContent:"space-between",gap:12,color:"#c8d3df",fontSize:".88rem"}}><span>{category}</span><strong>{fmt(amount)}</strong></div>)}</div>}</div>;})}
   </Modal>;
 }
 
