@@ -204,7 +204,7 @@ function travelCategory(entry) {
   return "Outros / a classificar";
 }
 
-function TripsModal({show,onClose,trips,entries,onSave,saving}) {
+function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
   const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState(""),[selectedTrip,setSelectedTrip]=useState(""),[selectedCategory,setSelectedCategory]=useState("");
   useEffect(()=>{if(show){setDestination("");setStartDate("");setSelectedTrip("");setSelectedCategory("");}},[show]);
   const grouped={};
@@ -239,6 +239,7 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
         <button type="button" onClick={()=>{setSelectedTrip(open?"":d);setSelectedCategory("");}} style={{...S.btn(false),width:"100%",textAlign:"left",display:"flex",justifyContent:"space-between",gap:12}}>
           <strong>{d}</strong><strong>{fmt(group.total)}</strong>
         </button>
+        {trip && <button type="button" disabled={saving} onClick={()=>{if(window.confirm(`Tem certeza de que deseja excluir esta viagem?\n\n${d}\n\nOs lançamentos financeiros serão preservados.`))onDelete(trip);}} style={{...S.btn(false),marginTop:8,color:"#ff9b9b",borderColor:"#925252"}}>Excluir viagem</button>}
         <div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Clique para detalhar a viagem</div>
         {open && <div style={{display:"grid",gap:10,marginTop:12}}>
           <div style={{color:"#75b8ff",fontWeight:700,fontSize:"1.15rem"}}>Total da viagem: {fmt(group.total)}</div>
@@ -1007,7 +1008,7 @@ function Finance() {
         <p style={{fontSize:13,color:"#aab9cb",margin:"16px 0"}}>Use Editar informações para ajustar a série ou Cancelar recorrência para encerrar a repetição e remover suas previsões.</p>
         <button style={S.btn(true)} disabled={saving || !allEntries.some(e=>e.recurring && e.bank!=="Recorrência" && e.date<`${year}-${String(month+1).padStart(2,"0")}-01`)} onClick={()=>saveSafely(async()=>{const r=await api.applyRecurring(month,year);await loadMonth();await loadAll();showToast(`${r.inserted} recorrentes gerados; ${r.skipped} já processados`);})}>{saving?"Salvando…":`Aplicar em ${MONTHS[month]}`}</button>
       </Modal>
-      <TripsModal show={showTrips} onClose={()=>setShowTrips(false)} trips={trips} entries={allEntries} saving={saving} onSave={trip=>saveSafely(async()=>{const saved=await api.addTrip(trip);setTrips(prev=>[...prev.filter(t=>t.destination!==saved.destination),saved].sort((a,b)=>a.destination.localeCompare(b.destination)));showToast("Destino cadastrado ✓");})}/>
+      <TripsModal show={showTrips} onClose={()=>setShowTrips(false)} trips={trips} entries={allEntries} saving={saving} onDelete={trip=>saveSafely(async()=>{await api.deleteTrip(trip.id);await loadTrips();showToast("Cadastro da viagem excluído; lançamentos preservados ✓");})} onSave={trip=>saveSafely(async()=>{const saved=await api.addTrip(trip);setTrips(prev=>[...prev.filter(t=>t.destination!==saved.destination),saved].sort((a,b)=>a.destination.localeCompare(b.destination)));showToast("Destino cadastrado ✓");})}/>
       <EntryModal show={showAdd} onClose={()=>setShowAdd(false)} onSave={form=>saveSafely(()=>handleSave(form))} initial={null} saving={saving} trips={knownTrips}/>
       <EntryModal show={!!editEntry} onClose={()=>setEditEntry(null)} onSave={form=>saveSafely(()=>handleSave(form))} initial={editEntry} saving={saving} trips={knownTrips}/>
 
