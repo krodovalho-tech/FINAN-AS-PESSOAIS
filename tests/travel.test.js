@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { travelDetails, travelPayload } from '../src/travel.js';
+import { travelDetails, travelPayload, normalizeDestination } from '../src/travel.js';
 import { normalizeEntryForm } from '../src/entry-form.js';
 import { normalizeImport } from '../src/import.js';
 import { recurringPayload } from '../lib/entry-validation.js';
@@ -25,4 +25,9 @@ test('observações antigas e metadados inválidos continuam intactos',()=>{
   for(const notes of ['Observação anterior','{"origin":"assistant"}','@finance-travel:inválido']){
     const entry={notes};assert.deepEqual(travelDetails(entry),{destination:'',notes});assert.deepEqual(travelPayload(entry),entry);
   }
+});
+
+test('normaliza variações do mesmo destino para um único agrupador',()=>{
+  for(const value of ['Carolina, MA','Carolina/MA','Carolina / MA',' Carolina  /  MA ']) assert.equal(normalizeDestination(value),'Carolina / MA');
+  for(const description of ['Hospedagem — viagem Carolina, MA — cartão','Balsa — viagem a Carolina/MA','Abastecimento — viagem a Carolina / MA']) assert.equal(travelDetails({category:'Viagem',description}).destination,'Carolina / MA');
 });
