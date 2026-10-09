@@ -421,6 +421,7 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
         Pré-visualização — {items.length} transações
       </h2>
       <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência, conta, data e valor. Vincular preserva a categoria e a viagem. Não vincule uma compra integral a uma parcela: selecione a parcela correspondente. Pagamento de fatura não soma novamente como despesa. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
+      <p style={{color:'#ffce85',marginBottom:12}}>{items.filter(e=>e.import_action==='pending').length} pendentes de revisão · {items.filter(e=>e.import_action==='skip').length} ignorados · {items.filter(e=>e.import_action?.startsWith('match:')).length} vínculos selecionados. O PDF exige revisão antes de salvar.</p>
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
         {items.map((e,i)=>(
           <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",alignItems:"center",padding:"0.8rem 0",borderBottom:"1px solid #253244",fontSize:"0.85rem" }}>
@@ -432,9 +433,10 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
             <span style={{ color:e.type==="income"?"#53d6a0":"#ff929b",textAlign:"right",fontWeight:"600" }}>
               {e.type==="income"?"+":"-"}{fmt(e.amount)}
             </span>
+            {reconciliationCandidates(e,existing).length>0 && <p style={{gridColumn:'1 / -1',color:'#ffce85'}}>Possível repetido: {reconciliationCandidates(e,existing).length} lançamento(s) com mesmo valor e data próxima. Confira as opções de vínculo.</p>}
             <label style={{gridColumn:'1 / -1'}}>Tratamento na importação
               <select aria-label={`Conciliar ${e.description}`} style={S.input} value={e.import_action || 'new'} onChange={ev=>onChange(i,'import_action',ev.target.value)}>
-                <option value="pending">Escolha antes de salvar</option><option value="new">Cadastrar como novo gasto / receita</option><option value="skip">Ignorar esta linha / já importada</option>
+                <option value="pending">Escolha antes de salvar</option><option value="new">Cadastrar como novo (confirmo que é distinto)</option><option value="skip">Ignorar esta linha / já importada</option>
                 {e.type==='expense' && <option value="card_payment">Quitação da fatura (sem nova despesa)</option>}
                 {reconciliationCandidates(e,existing).map(t=><option key={t.id} value={`match:${t.id}`}>Vincular: {String(t.date).slice(0,10)} · {t.description} · {fmt(t.amount)}</option>)}
               </select>
@@ -694,9 +696,12 @@ function Finance() {
         else items=parseImportJSON(content);
       }
       if(!items.length)throw new Error("Nenhuma transação encontrada no arquivo.");
+      const latest=await api.getAllEntries();
+      if(!Array.isArray(latest))throw new Error("Não foi possível conferir os lançamentos existentes. Atualize antes de importar.");
+      setAllEntries(latest);
       setImportItems(items.map(item=>({...item,import_action:
-        allEntries.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
-        reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
+        latest.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
+        reconciliationCandidates(item,latest).length || format==='pdf' || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
       setImportStatus(`${items.length} movimentações lidas. Revise e confirme a importação; nada foi salvo ainda.`);
     }catch(err){setImportStatus(err.message||"Erro ao ler o arquivo.");showToast(err.message||"Erro ao ler o arquivo.");}
@@ -1072,7 +1077,7 @@ function Finance() {
 
       {/* Import preview */}
       <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} existing={allEntries} saving={saving} onConfirm={()=>saveSafely(handleImportConfirm)}
-        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v}:e))}/>
+        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v,...(k==='import_action'?{reviewed_new:v==='new'}:{})}:e))}/>
     </div>
   );
 }

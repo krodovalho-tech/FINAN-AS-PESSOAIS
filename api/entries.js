@@ -120,7 +120,7 @@ export default async function handler(req, res) {
         const result = await importBatch(bulk);
         return res.status(201).json({ ...result, entries: normalizeRows(result.entries) });
       } catch (err) {
-        if (/parcela|fatura|vinculad|prévia/.test(err.message)) return res.status(409).json({ error: err.message });
+        if (/parcela|fatura|vinculad|prévia|duplicidade/.test(err.message)) return res.status(409).json({ error: err.message });
         throw err;
       }
     }
