@@ -32,3 +32,20 @@ test('normaliza variações do mesmo destino para um único agrupador',()=>{
   for(const description of ['Hospedagem — viagem Carolina, MA — cartão','Balsa — viagem a Carolina/MA','Abastecimento — viagem a Carolina / MA']) assert.equal(travelDetails({category:'Viagem',description}).destination,'Carolina / MA');
   assert.equal(travelDetails({category:'Alimentação',description:'Alimentação — viagem a Carolina, MA — bares e restaurantes'}).destination,'Carolina / MA');
 });
+
+
+test('descrições de voz e chat vinculam alimentação sem confundir pagamento com destino',()=>{
+  for (const description of [
+    'Alimentação – viagem Carolina/MA (cartão de crédito)',
+    'Alimentação - viagem Carolina MA - crédito',
+    'Alimentação viagem Carolina/MA',
+    'Viagem para Carolina/MA (crédito)',
+  ]) {
+    const entry={category:'Alimentação',description,amount:260.70,notes:'{"origin":"assistant"}'};
+    assert.equal(travelDetails(entry).destination,'Carolina / MA');
+    assert.equal(entry.category,'Alimentação');
+    assert.equal(entry.amount,260.70);
+  }
+  assert.equal(travelDetails({description:'Alimentação Carolina'}).destination,'');
+  assert.equal(travelDetails(travelPayload({description:'Alimentação – viagem Carolina/MA',destination:'Palmas/TO'})).destination,'Palmas / TO');
+});

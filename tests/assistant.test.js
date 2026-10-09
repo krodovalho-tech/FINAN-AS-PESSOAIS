@@ -55,3 +55,15 @@ test('registro do assistente estrutura viagem e compra parcelada nas observaçõ
  const body={type:'expense',category:'Hospedagem',description:'Hospedagem — parcela 1/3 — compra total R$ 1.050,00 — viagem Carolina MA',amount:350,date:'2026-10-09',request_id:'hosp_carolina_1050'};
  const result=await call('record',body,'D'.repeat(43));assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
 });
+
+
+test('alimentação com travessão curto grava destino limpo e mantém categoria e valor',async()=>{
+ globalThis.assistantSql=async(strings,...v)=>{
+  if(strings.join('').startsWith('SELECT id FROM assistant')) return {rows:[{id:1}]};
+  assert.equal(v[1],'Alimentação');assert.equal(v[3],260.70);
+  assert.match(v[5],/@finance-travel:{"destination":"Carolina \/ MA"}/);
+  return {rows:[{id:2227,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4]}]};
+ };
+ const result=await call('record',{type:'expense',category:'Alimentação',description:'Alimentação – viagem Carolina/MA (cartão de crédito)',amount:260.70,date:'2026-10-09',request_id:'alimentacao_carolina_test'},'D'.repeat(43));
+ assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
+});

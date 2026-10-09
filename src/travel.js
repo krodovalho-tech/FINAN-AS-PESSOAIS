@@ -4,13 +4,18 @@ export function normalizeDestination(value) {
   return String(value || '').trim().replace(/\s*(?:,|\/|\s)\s*([A-Za-z]{2})\s*$/, ' / $1').replace(/\s+/g, ' ');
 }
 
+// Descriptions sent by voice/chat may use any dash or put payment in parentheses.
+export function destinationFromDescription(description) {
+  const match = /(?:^|[—–-]|\s)\s*viagem\s+(?:a\s+|para\s+)?([^—–()]+?)(?=\s*[—–(]|\s+-\s+|$)/i.exec(String(description || ''));
+  return match ? normalizeDestination(match[1]) : '';
+}
+
 // Keep travel metadata in the existing notes field so exports and recurring
 // forecasts retain it, without replacing the transaction's financial category.
 export function travelDetails(entry) {
   const notes = typeof entry?.notes === 'string' ? entry.notes : '';
   if (!notes.startsWith(PREFIX)) {
-    const legacy = /(?:^|—)\s*viagem\s+(?:a\s+)?([^—]+?)(?:\s*—|$)/i.exec(entry?.description || '');
-    return { destination: legacy ? normalizeDestination(legacy[1]) : '', notes };
+    return { destination: destinationFromDescription(entry?.description), notes };
   }
   const end = notes.indexOf('\n');
   try {

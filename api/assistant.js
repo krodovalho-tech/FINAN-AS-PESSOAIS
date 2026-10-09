@@ -2,11 +2,10 @@ import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
 import { isCardPayment } from '../lib/card.js';
-import { normalizeDestination } from '../src/travel.js';
+import { destinationFromDescription } from '../src/travel.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
-const travelFromDescription = description => { const m=/(?:^|—|-)\s*viagem\s+(?:a\s+)?([^—-]+?)(?:\s*(?:—|-)|$)/i.exec(String(description||'')); return m ? normalizeDestination(m[1]) : ''; };
 const cardFromDescription = (description,date,source) => { const p=/parcela\s+(\d+)\/(\d+)/i.exec(String(description||'')), t=/compra total R\$\s*([\d.]+,\d{2})/i.exec(String(description||'')); if(!p||!t||+p[1]<1||+p[1]>+p[2]) return null; return {purchase_id:`assistant:${source}`,installment:+p[1],count:+p[2],total:Number(t[1].replaceAll('.','').replace(',','.')),purchase_date:date,card:''}; };
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
@@ -81,7 +80,7 @@ export default async function handler(req,res) {
       const e=req.body || {};const amount=Number(e.amount);
       if(!['income','expense'].includes(e.type)||!Number.isFinite(amount)||amount<=0||amount>9999999999.99||!/^\d{4}-\d{2}-\d{2}$/.test(e.date||'')||typeof e.description!=='string'||!e.description.trim()||e.description.length>1000||typeof e.category!=='string'||!e.category.trim()||e.category.length>60||! /^[A-Za-z0-9_-]{8,100}$/.test(e.request_id||'')) return res.status(400).json({error:'Lançamento inválido. Confira valor, data, descrição, categoria e identificador.'});
       const source=`${connections[0].id}:${e.request_id}`;
-      const destination=travelFromDescription(e.description);const card=cardFromDescription(e.description,e.date,source);const metadata=JSON.stringify({origin:'assistant',payment_account:e.payment_account || 'Não informado',reconciliation:'Aguardando conferência com o extrato bancário'});const notes=(destination?`@finance-travel:${JSON.stringify({destination})}\n`:'')+(card?`@finance-card:${JSON.stringify(card)}\n`:'')+metadata;
+      const destination=destinationFromDescription(e.description);const card=cardFromDescription(e.description,e.date,source);const metadata=JSON.stringify({origin:'assistant',payment_account:e.payment_account || 'Não informado',reconciliation:'Aguardando conferência com o extrato bancário'});const notes=(destination?`@finance-travel:${JSON.stringify({destination})}\n`:'')+(card?`@finance-card:${JSON.stringify(card)}\n`:'')+metadata;
       const {rows}=await sql`INSERT INTO entries (type,category,description,amount,date,notes,source_id,bank,confirmed) VALUES (${e.type},${e.category},${e.description},${Math.round(amount*100)/100},${e.date},${notes},${source},'Assistente',TRUE) ON CONFLICT (bank,source_id) WHERE source_id IS NOT NULL AND bank IS NOT NULL DO NOTHING RETURNING id,type,category,description,amount,date`;
       if(rows.length) return res.status(201).json({saved:true,duplicate:false,entry:rows[0],reconciliation:'Aguardando conferência com o extrato bancário'});
       const existing=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE bank='Assistente' AND source_id=${source}`;
