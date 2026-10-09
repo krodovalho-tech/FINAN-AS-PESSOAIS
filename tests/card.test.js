@@ -1,10 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { installmentSchedule, purchaseCosts, cardDetails, reconciliationCandidates, isCardPayment } from '../lib/card.js';
+import { installmentSchedule, purchaseCosts, cardDetails, reconciliationCandidates, isCardPayment, dashboardEntries } from '../lib/card.js';
 import { travelPayload, travelDetails } from '../src/travel.js';
 import { importBatch } from '../lib/import-batch.js';
 
 const purchase = { type:'expense', category:'Viagem', description:'Hospedagem de exemplo', amount:1050, date:'2026-10-09', destination:'Cidade / UF' };
+test('dashboard soma compra inteira em outubro e parcelas só na visão mensal',()=>{
+  const installments=installmentSchedule(purchase,3,'Exemplo','purchase');
+  const all=[...installments.reverse(),{...purchase,id:4,description:'Hospedagem anterior',date:'2026-10-08',amount:350},{type:'income',date:'2026-10-01',amount:2000}];
+  const expenses=(list,month)=>list.filter(e=>e.type==='expense' && e.date.slice(0,7)===month).reduce((sum,e)=>sum+e.amount,0);
+  assert.equal(expenses(dashboardEntries(all),'2026-10'),1400);
+  assert.equal(expenses(dashboardEntries(all),'2026-11'),0);
+  assert.equal(expenses(dashboardEntries(all,'installments'),'2026-10'),700);
+  assert.equal(expenses(dashboardEntries(all,'installments'),'2026-11'),350);
+  assert.equal(dashboardEntries(all).find(e=>e.card)?.card.installment,1);
+  assert.equal(dashboardEntries(all).find(e=>e.type==='income').amount,2000);
+});
 test('compra conta uma vez na viagem e divide orçamento em três meses',()=>{
   const entries = installmentSchedule(travelPayload(purchase),3,'Cartão exemplo','purchase-example');
   assert.deepEqual(entries.map(e=>[e.date,e.amount]),[['2026-10-09',350],['2026-11-09',350],['2026-12-09',350]]);

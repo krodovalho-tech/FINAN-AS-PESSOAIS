@@ -3,7 +3,7 @@ import { api, request } from "./api.js";
 import { travelDetails } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { normalizeImport } from "./import.js";
-import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment } from "../lib/card.js";
+import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlusCircle, Trash2, TrendingUp, TrendingDown, DollarSign, BarChart3,
@@ -389,6 +389,7 @@ function Finance() {
   const savingRef = useRef(false);
   const [loading, setLoading]       = useState(true);
   const [view, setView]             = useState("dashboard");
+  const [dashboardMode,setDashboardMode] = useState('purchases');
   const [search, setSearch]         = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortBy, setSortBy]         = useState("date");
@@ -460,15 +461,17 @@ function Finance() {
   };
 
   // ── Computed values ──
-  const totalIncome  = useMemo(() => entries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0), [entries]);
-  const totalExpense = useMemo(() => entries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((s,e)=>s+Number(e.amount),0), [entries]);
+  const dashboardAll = useMemo(()=>dashboardEntries(allEntries,dashboardMode),[allEntries,dashboardMode]);
+  const dashboardMonth = useMemo(()=>dashboardAll.filter(e=>Number(String(e.date).slice(0,4))===year && Number(String(e.date).slice(5,7))===month+1),[dashboardAll,month,year]);
+  const totalIncome  = useMemo(() => dashboardMonth.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
+  const totalExpense = useMemo(() => dashboardMonth.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
   const balance      = totalIncome - totalExpense;
   const savingsRate  = totalIncome>0 ? ((balance/totalIncome)*100).toFixed(1) : 0;
 
   // Previous month comparison
   const prevM = month===0?11:month-1;
   const prevY = month===0?year-1:year;
-  const prevEntries = useMemo(() => allEntries.filter(e=>{ const d=new Date(e.date+"T12:00:00"); return d.getMonth()===prevM && d.getFullYear()===prevY; }), [allEntries,prevM,prevY]);
+  const prevEntries = useMemo(() => dashboardAll.filter(e=>{ const d=new Date(e.date+"T12:00:00"); return d.getMonth()===prevM && d.getFullYear()===prevY; }), [dashboardAll,prevM,prevY]);
   const prevIncome  = prevEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
   const prevExpense = prevEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((s,e)=>s+Number(e.amount),0);
 
@@ -484,7 +487,7 @@ function Finance() {
     for (let i=5; i>=0; i--) {
       const d = new Date(year, month-i, 1);
       const m2 = d.getMonth(), y2 = d.getFullYear();
-      const mes = allEntries.filter(e=>{ const ed=new Date(e.date+"T12:00:00"); return ed.getMonth()===m2 && ed.getFullYear()===y2; });
+      const mes = dashboardAll.filter(e=>{ const ed=new Date(e.date+"T12:00:00"); return ed.getMonth()===m2 && ed.getFullYear()===y2; });
       result.push({
         name: MONTHS[m2].slice(0,3),
         Receitas: mes.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0),
@@ -492,31 +495,31 @@ function Finance() {
       });
     }
     return result;
-  }, [allEntries, month, year]);
+  }, [dashboardAll, month, year]);
 
   // By category
   const byCat = useMemo(() => {
     const map = {};
-    entries.filter(e=>!isCardPayment(e)).forEach(e => {
+    dashboardMonth.forEach(e => {
       if (!map[e.category]) map[e.category] = { income:0, expense:0 };
       map[e.category][e.type==="income"?"income":"expense"] += Number(e.amount);
     });
     return map;
-  }, [entries]);
+  }, [dashboardMonth]);
 
   const pieData = Object.entries(byCat).filter(([,v])=>v.expense>0).map(([name,v])=>({ name, value:v.expense })).sort((a,b)=>b.value-a.value);
   const barData = Object.entries(byCat).map(([name,v])=>({ name, Receita:v.income, Despesa:v.expense })).sort((a,b)=>b.Despesa-a.Despesa);
 
-  const detailEntries = entries.filter(e=>e.category===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const detailEntries = dashboardMonth.filter(e=>e.category===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 
   // Budget alerts
   const budgetAlerts = useMemo(() => Object.entries(budgets).map(([cat,lim])=>{ const spent=byCat[cat]?.expense||0; const ratio=spent/lim; return { cat, lim, spent, ratio }; }).filter(b=>b.ratio>=0.7).sort((a,b)=>b.ratio-a.ratio), [budgets,byCat]);
 
   // Biggest expense
   const biggestExpense = useMemo(() => {
-    const exp = entries.filter(e=>e.type==="expense" && !isCardPayment(e));
+    const exp = dashboardMonth.filter(e=>e.type==="expense");
     return exp.reduce((max,e)=>Number(e.amount)>Number(max?.amount||0)?e:max, null);
-  }, [entries]);
+  }, [dashboardMonth]);
 
   // ── Filtered + sorted transactions ──
   const filtered = useMemo(() => {
@@ -723,7 +726,11 @@ function Finance() {
       </div>
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
-        <p style={{color:'#aab9cb',marginBottom:16}}>Orçamento mensal · valores das parcelas do mês. Em Viagens, veja o custo completo das compras.</p>
+        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
+          <button style={S.btn(dashboardMode==='purchases')} aria-pressed={dashboardMode==='purchases'} onClick={()=>setDashboardMode('purchases')}>Compras do mês · valor total</button>
+          <button style={S.btn(dashboardMode==='installments')} aria-pressed={dashboardMode==='installments'} onClick={()=>setDashboardMode('installments')}>Parcelas do mês</button>
+        </div>
+        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Despesas, saldo e categorias consideram o valor completo das compras realizadas no mês. Parcelas futuras não são somadas novamente.' : 'Despesas, saldo e categorias consideram somente as parcelas previstas para o mês.'} O saldo exibido não é o saldo bancário.</p>
         {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>
           <p style={S.label}>Custo total das viagens · todos os meses</p>
           {knownTrips.map(t=><p key={t.destination} style={{marginTop:10}}>{t.destination}: <strong style={{color:'#75b8ff'}}>{fmt(purchaseCosts(allEntries).filter(e=>travelDetails(e).destination===t.destination).reduce((sum,e)=>sum+Number(e.amount),0))}</strong></p>)}
@@ -961,7 +968,8 @@ function Finance() {
             <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#ff929b":"#53d6a0"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
             <p style={{color:"#b6c4d6",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
             <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
-            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(e);}}>Editar lançamento / observações</button>
+            {e.card && <p style={{color:'#aab9cb'}}>Valor completo da compra · a edição abaixo abre a parcela cadastrada.</p>}
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===e.id) || e);}}>Editar lançamento / observações</button>
           </article>)}
         </div>
         <button style={{...S.btn(false),marginTop:16}} onClick={()=>setDetailCategory(null)}>Fechar</button>
