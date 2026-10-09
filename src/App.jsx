@@ -193,8 +193,8 @@ function DestinationField({value, onChange, trips}) {
 }
 
 function TripsModal({show,onClose,trips,entries,onSave,saving}) {
-  const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState("");
-  useEffect(()=>{if(show){setDestination("");setStartDate("");}},[show]);
+  const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState(""),[selectedTrip,setSelectedTrip]=useState(""),[selectedCategory,setSelectedCategory]=useState("");
+  useEffect(()=>{if(show){setDestination("");setStartDate("");setSelectedTrip("");setSelectedCategory("");}},[show]);
   const totals={},breakdown={};
   purchaseCosts(entries).forEach(e=>{const d=travelDetails(e).destination;if(!d)return;const amount=Number(e.amount);totals[d]=(totals[d]||0)+amount;const category=e.category || "Sem categoria";breakdown[d] ||= {};breakdown[d][category]=(breakdown[d][category]||0)+amount;});
   const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
@@ -208,7 +208,7 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
     </form>
     <p style={{...S.label,marginTop:24,marginBottom:12}}>Custo total por destino · compras completas, incluindo parcelas futuras</p>
     {!destinations.length && <p style={{color:"#aab9cb"}}>Nenhum destino cadastrado.</p>}
-    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);const categories=Object.entries(breakdown[d] || {}).sort((a,b)=>b[1]-a[1]);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div>{categories.length>0 && <div style={{display:"grid",gap:4,marginTop:8}}>{categories.map(([category,amount])=><div key={category} style={{display:"flex",justifyContent:"space-between",gap:12,color:"#c8d3df",fontSize:".88rem"}}><span>{category}</span><strong>{fmt(amount)}</strong></div>)}</div>}</div>;})}
+    {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);const categories=Object.entries(breakdown[d] || {}).sort((a,b)=>b[1]-a[1]);const open=selectedTrip===d;return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><button type="button" onClick={()=>{setSelectedTrip(open?"":d);setSelectedCategory("");}} style={{...S.btn(false),width:"100%",textAlign:"left",display:"flex",justifyContent:"space-between",gap:12}}><strong>{d}</strong><strong>{fmt(totals[d] || 0)}</strong></button><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Clique para detalhar a viagem</div>{open && categories.length>0 && <div style={{display:"grid",gap:6,marginTop:10}}>{categories.map(([category,amount])=>{const categoryOpen=selectedCategory===category;const items=purchaseCosts(entries).filter(e=>travelDetails(e).destination===d && (e.category || "Sem categoria")===category).sort((a,b)=>String(b.date).localeCompare(String(a.date)));return <div key={category}><button type="button" onClick={()=>setSelectedCategory(categoryOpen?"":category)} style={{...S.btn(false),width:"100%",display:"flex",justifyContent:"space-between",gap:12,textAlign:"left"}}><span>{category}</span><strong>{fmt(amount)}</strong></button>{categoryOpen && <div style={{margin:"6px 4px 10px 12px",borderLeft:"2px solid #35465c",paddingLeft:10}}>{items.map((e,i)=><div key={e.id || e.source_id || i} style={{padding:"7px 0",borderBottom:"1px solid #263548",fontSize:".85rem"}}><div>{e.description}</div><div style={{color:"#aab9cb",marginTop:2}}>{new Date(String(e.date).slice(0,10)+"T12:00:00").toLocaleDateString("pt-BR")} · {fmt(e.amount)}</div></div>)}</div>}</div>;})}</div>}</div>;})}
   </Modal>;
 }
 
