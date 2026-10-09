@@ -1,7 +1,7 @@
 const PREFIX = '@finance-travel:';
 
 export function normalizeDestination(value) {
-  return String(value || '').trim().replace(/\s*[,/]\s*([A-Za-z]{2})\s*$/, ' / $1').replace(/\s+/g, ' ');
+  return String(value || '').trim().replace(/\s*(?:,|\/|\s)\s*([A-Za-z]{2})\s*$/, ' / $1').replace(/\s+/g, ' ');
 }
 
 // Keep travel metadata in the existing notes field so exports and recurring
