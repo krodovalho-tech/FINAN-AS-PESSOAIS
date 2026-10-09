@@ -2,7 +2,7 @@ import "./responsive.css";
 import { api, request } from "./api.js";
 import { travelDetails } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
-import { normalizeImport } from "./import.js";
+import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -721,12 +721,13 @@ function Finance() {
     if(!file)return;
     try{
       let items=[];
-      if(/\.pdf$/i.test(file.name))items=await parseUnicredPDF(file);
+      const format=await detectImportFormat(file);
+      if(format==='pdf')items=await parseUnicredPDF(file);
       else{
         const content=await file.text();
-        if(/\.ofx$/i.test(file.name))items=parseOFX(content);
-        else if(/\.csv$/i.test(file.name))items=parseCSV(content);
-        else items=normalizeImport(JSON.parse(content));
+        if(format==='ofx')items=parseOFX(content);
+        else if(format==='csv')items=parseCSV(content);
+        else items=parseImportJSON(content);
       }
       if(!items.length)throw new Error("Nenhuma transação encontrada no arquivo.");
       setImportItems(items.map(item=>({...item,import_action:
@@ -797,9 +798,9 @@ function Finance() {
             </select>
             <input type="number" value={year} min="2000" max="2099" onChange={e=>setYear(+e.target.value)} style={{ ...S.input, width:"85px", marginTop:0, padding:"0.4rem 0.6rem" }}/>
 
-            <label title="Importar OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
-              <Upload size={14}/> Importar
-              <input type="file" accept=".json,.ofx,.OFX,.csv,.pdf" onChange={handleFileImport} style={{ display:"none" }}/>
+            <label title="Importar PDF Unicred / OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
+              <Upload size={14}/> Importar PDF / arquivos
+              <input type="file" accept=".json,.ofx,.OFX,.csv,.pdf,application/pdf" onChange={handleFileImport} style={{ display:"none" }}/>
             </label>
             <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar

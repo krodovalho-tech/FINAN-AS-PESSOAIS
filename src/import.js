@@ -15,3 +15,24 @@ export function normalizeImport(data) {
     return entry;
   });
 }
+
+
+export async function detectImportFormat(file) {
+  if (!file.size) throw new Error('O arquivo está vazio. Baixe o extrato novamente antes de importar.');
+  const header = await file.slice(0, 1024).text();
+  if (header.includes('%PDF-')) return 'pdf';
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    throw new Error('O arquivo selecionado não contém um PDF válido. Baixe o extrato novamente.');
+  }
+  if (/\.ofx$/i.test(file.name) || /<OFX[\s>]|OFXHEADER:/i.test(header)) return 'ofx';
+  if (/\.csv$/i.test(file.name)) return 'csv';
+  if (/^[\s\uFEFF]*[\[{]/.test(header)) return 'json';
+  throw new Error('Formato não reconhecido. Selecione um extrato PDF da Unicred, OFX, CSV ou JSON.');
+}
+
+export function parseImportJSON(content) {
+  let data;
+  try { data = JSON.parse(content.replace(/^\uFEFF/, '')); }
+  catch { throw new Error('O arquivo JSON está incompleto ou inválido. Baixe ou exporte o arquivo novamente.'); }
+  return normalizeImport(data);
+}
