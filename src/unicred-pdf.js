@@ -24,6 +24,8 @@ export function parseUnicredRows(rows, autoCategory = () => "Outros") {
     pending=null;
   };
   for(const row of rows){
+    // The statement generation timestamp is a header, not a transaction.
+    if(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}(?::\d{2})?(?:\s|$)/.test(row))continue;
     if(/Lançamentos futuros/i.test(row))break;
     if(/Saldo no final do período/i.test(row)){flush();continue;}
     const start=/^(\d{2}\/\d{2}\/\d{4})\s+(.+)/.exec(row);

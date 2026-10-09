@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseUnicredRows } from '../src/unicred-pdf.js';
 import { dashboardCategory, travelDetails } from '../src/travel.js';
 const rows=[
+ '09/10/2026 15:44:45',
  'Coop: 566 - AG: 1738 - Conta: 134279',
  'Saldo em 30/09/2026: R$ 740,12',
  '01/10/2026 CREDITO DE COBRANCA ( Doc.: JEiTDwIt1U / Créditos R$ 1.325,42 R$ 2.065,54',
@@ -32,4 +33,11 @@ test('dashboard soma viagem sem duplicar e conserva categoria original',()=>{
  assert.equal(entries[1].category,'Alimentação');
  assert.ok(entries.every(e=>travelDetails(e).destination==='Carolina / MA'));
  assert.equal(dashboardCategory({type:'expense',category:'Alimentação',description:'Almoço SESC'}),'Alimentação');
+});
+
+
+test('cabeçalho com data e hora não vira movimentação nem contamina a descrição',()=>{
+ const entries=parseUnicredRows([...rows.slice(0,7),'09/10/2026 15:44:45',...rows.slice(7)]);
+ assert.equal(entries.length,3);
+ assert.ok(entries.every(e=>!e.description.includes('15:44:45')));
 });
