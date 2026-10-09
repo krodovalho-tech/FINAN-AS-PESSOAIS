@@ -73,6 +73,69 @@ function parseOFX(content) {
   return results;
 }
 
+
+async function parseUnicredPDF(file) {
+  const pdfjs = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+  const pdf = await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const rows=[];
+  for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+    const page=await pdf.getPage(pageNumber);
+    const content=await page.getTextContent();
+    const lines=[];
+    for(const item of content.items){
+      if(!item.str?.trim())continue;
+      const x=item.transform[4],y=item.transform[5];
+      let line=lines.find(line=>Math.abs(line.y-y)<2.5);
+      if(!line){line={y,parts:[]};lines.push(line);}
+      line.parts.push({x,str:item.str});
+    }
+    lines.sort((a,b)=>b.y-a.y);
+    for(const line of lines)rows.push(line.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(" ").replace(/\s+/g," ").trim());
+  }
+  const full=rows.join("\n");
+  const account=/Coop:\s*(\d+)\s*-\s*AG:\s*(\d+)\s*-\s*Conta:\s*(\d+)/i.exec(full);
+  if(!account)throw new Error("Conta Unicred não identificada no PDF.");
+  const bank="Unicred "+account[1]+" • "+account[2]+" • "+account[3];
+  const opening=/Saldo em\s+\d{2}\/\d{2}\/\d{4}:\s*R\$\s*([\d.,]+)/i.exec(full);
+  const closing=/Saldo no final do período\s+R\$\s*([\d.,]+)/i.exec(full);
+  const cents=v=>Math.round(Number(v.replace(/\./g,"").replace(",","."))*100);
+  if(!opening||!closing)throw new Error("Saldos de abertura e fechamento não encontrados.");
+  const items=[];
+  let pending=null;
+  const flush=()=>{
+    if(!pending)return;
+    const value=/(-?\s*R\$\s*[\d.]+,\d{2})\s+(R\$\s*[\d.]+,\d{2})\s*$/.exec(pending.raw);
+    if(!value)throw new Error("Movimentação não interpretada em "+pending.date);
+    const negative=/^\s*-/.test(value[1]);
+    const amount=cents(value[1].replace(/^\s*-/,"").replace(/R\$\s*/,""));
+    const balance=cents(value[2].replace(/R\$\s*/,""));
+    const description=pending.raw.slice(0,value.index).trim();
+    const [d,m,y]=pending.date.split("/");
+    const date=y+"-"+m+"-"+d;
+    if(!amount||!description)throw new Error("Movimentação incompleta em "+pending.date);
+    items.push({date,description,type:negative?"expense":"income",amount:amount/100,category:autoCategory(description),recurring:false,bank,source_id:"PDF-"+date+"-"+(negative?"D":"C")+"-"+amount+"-"+balance,_balance:balance});
+    pending=null;
+  };
+  for(const row of rows){
+    if(/Lançamentos futuros/i.test(row))break;
+    if(/Saldo no final do período/i.test(row)){flush();continue;}
+    const start=/^(\d{2}\/\d{2}\/\d{4})\s+(.+)/.exec(row);
+    if(start){flush();pending={date:start[1],raw:start[2]};}
+    else if(pending && !/^(CENTRAL DE RELACIONAMENTO|0800|Pág\.|Data\s+Lançamentos)/i.test(row))pending.raw+=" "+row;
+  }
+  flush();
+  if(!items.length)throw new Error("Nenhuma movimentação encontrada.");
+  let running=cents(opening[1]);
+  for(const item of items){
+    running+=(item.type==="income"?1:-1)*Math.round(item.amount*100);
+    if(running!==item._balance)throw new Error("Divergência no saldo de "+item.date+"; importação bloqueada.");
+    delete item._balance;
+  }
+  if(running!==cents(closing[1]))throw new Error("Saldo final divergente; importação bloqueada.");
+  return items;
+}
+
 // ─── CSV PARSER ─────────────────────────────────────────────────────────────
 function parseCSV(content) {
   const lines = content.split(/\r?\n/).filter(Boolean);
@@ -653,28 +716,24 @@ function Finance() {
   };
 
   // ── Import file ──
-  const handleFileImport = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const content = ev.target.result;
-      let items = [];
-      if (file.name.endsWith(".ofx") || file.name.endsWith(".OFX")) items = parseOFX(content);
-      else if (file.name.endsWith(".csv")) items = parseCSV(content);
-      else {
-        try {
-          const data = JSON.parse(content);
-          items = normalizeImport(data);
-        } catch (err) { showToast(err.message); return; }
+  const handleFileImport = async (e) => {
+    const file=e.target.files?.[0];e.target.value="";
+    if(!file)return;
+    try{
+      let items=[];
+      if(/\.pdf$/i.test(file.name))items=await parseUnicredPDF(file);
+      else{
+        const content=await file.text();
+        if(/\.ofx$/i.test(file.name))items=parseOFX(content);
+        else if(/\.csv$/i.test(file.name))items=parseCSV(content);
+        else items=normalizeImport(JSON.parse(content));
       }
-      if (!items.length) { showToast("Nenhuma transação encontrada no arquivo"); return; }
+      if(!items.length)throw new Error("Nenhuma transação encontrada no arquivo.");
       setImportItems(items.map(item=>({...item,import_action:
         allEntries.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
         reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+    }catch(err){showToast(err.message||"Erro ao ler o arquivo.");}
   };
 
   const handleImportConfirm = async () => {
@@ -740,7 +799,7 @@ function Finance() {
 
             <label title="Importar OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Upload size={14}/> Importar
-              <input type="file" accept=".json,.ofx,.OFX,.csv" onChange={handleFileImport} style={{ display:"none" }}/>
+              <input type="file" accept=".json,.ofx,.OFX,.csv,.pdf" onChange={handleFileImport} style={{ display:"none" }}/>
             </label>
             <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar
