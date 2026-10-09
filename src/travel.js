@@ -9,7 +9,7 @@ export function normalizeDestination(value) {
 export function travelDetails(entry) {
   const notes = typeof entry?.notes === 'string' ? entry.notes : '';
   if (!notes.startsWith(PREFIX)) {
-    const legacy = entry?.category === 'Viagem' && /(?:^|—)\s*viagem\s+(?:a\s+)?([^—]+?)(?:\s*—|$)/i.exec(entry.description || '');
+    const legacy = /(?:^|—)\s*viagem\s+(?:a\s+)?([^—]+?)(?:\s*—|$)/i.exec(entry?.description || '');
     return { destination: legacy ? normalizeDestination(legacy[1]) : '', notes };
   }
   const end = notes.indexOf('\n');
