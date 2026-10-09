@@ -30,4 +30,5 @@ test('observações antigas e metadados inválidos continuam intactos',()=>{
 test('normaliza variações do mesmo destino para um único agrupador',()=>{
   for(const value of ['Carolina, MA','Carolina/MA','Carolina / MA',' Carolina  /  MA ']) assert.equal(normalizeDestination(value),'Carolina / MA');
   for(const description of ['Hospedagem — viagem Carolina, MA — cartão','Balsa — viagem a Carolina/MA','Abastecimento — viagem a Carolina / MA']) assert.equal(travelDetails({category:'Viagem',description}).destination,'Carolina / MA');
+  assert.equal(travelDetails({category:'Alimentação',description:'Alimentação — viagem a Carolina, MA — bares e restaurantes'}).destination,'Carolina / MA');
 });
