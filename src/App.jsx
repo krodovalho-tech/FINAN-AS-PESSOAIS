@@ -1,6 +1,7 @@
+import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
-import { travelDetails } from "./travel.js";
+import { travelDetails, dashboardCategory } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
@@ -93,47 +94,7 @@ async function parseUnicredPDF(file) {
     lines.sort((a,b)=>b.y-a.y);
     for(const line of lines)rows.push(line.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(" ").replace(/\s+/g," ").trim());
   }
-  const full=rows.join("\n");
-  const account=/Coop:\s*(\d+)\s*-\s*AG:\s*(\d+)\s*-\s*Conta:\s*(\d+)/i.exec(full);
-  if(!account)throw new Error("Conta Unicred não identificada no PDF.");
-  const bank="Unicred "+account[1]+" • "+account[2]+" • "+account[3];
-  const opening=/Saldo em\s+\d{2}\/\d{2}\/\d{4}:\s*R\$\s*([\d.,]+)/i.exec(full);
-  const closing=/Saldo no final do período\s+R\$\s*([\d.,]+)/i.exec(full);
-  const cents=v=>Math.round(Number(v.replace(/\./g,"").replace(",","."))*100);
-  if(!opening||!closing)throw new Error("Saldos de abertura e fechamento não encontrados.");
-  const items=[];
-  let pending=null;
-  const flush=()=>{
-    if(!pending)return;
-    const value=/(-?\s*R\$\s*[\d.]+,\d{2})\s+(R\$\s*[\d.]+,\d{2})\s*$/.exec(pending.raw);
-    if(!value)throw new Error("Movimentação não interpretada em "+pending.date);
-    const negative=/^\s*-/.test(value[1]);
-    const amount=cents(value[1].replace(/^\s*-/,"").replace(/R\$\s*/,""));
-    const balance=cents(value[2].replace(/R\$\s*/,""));
-    const description=pending.raw.slice(0,value.index).trim();
-    const [d,m,y]=pending.date.split("/");
-    const date=y+"-"+m+"-"+d;
-    if(!amount||!description)throw new Error("Movimentação incompleta em "+pending.date);
-    items.push({date,description,type:negative?"expense":"income",amount:amount/100,category:autoCategory(description),recurring:false,bank,source_id:"PDF-"+date+"-"+(negative?"D":"C")+"-"+amount+"-"+balance,_balance:balance});
-    pending=null;
-  };
-  for(const row of rows){
-    if(/Lançamentos futuros/i.test(row))break;
-    if(/Saldo no final do período/i.test(row)){flush();continue;}
-    const start=/^(\d{2}\/\d{2}\/\d{4})\s+(.+)/.exec(row);
-    if(start){flush();pending={date:start[1],raw:start[2]};}
-    else if(pending && !/^(CENTRAL DE RELACIONAMENTO|0800|Pág\.|Data\s+Lançamentos)/i.test(row))pending.raw+=" "+row;
-  }
-  flush();
-  if(!items.length)throw new Error("Nenhuma movimentação encontrada.");
-  let running=cents(opening[1]);
-  for(const item of items){
-    running+=(item.type==="income"?1:-1)*Math.round(item.amount*100);
-    if(running!==item._balance)throw new Error("Divergência no saldo de "+item.date+"; importação bloqueada.");
-    delete item._balance;
-  }
-  if(running!==cents(closing[1]))throw new Error("Saldo final divergente; importação bloqueada.");
-  return items;
+  return parseUnicredRows(rows, autoCategory);
 }
 
 // ─── CSV PARSER ─────────────────────────────────────────────────────────────
@@ -521,6 +482,7 @@ function Finance() {
   const [showRecurring, setShowRecurring] = useState(false);
   const [showBudgets, setShowBudgets] = useState(false);
   const [importItems, setImportItems] = useState(null);
+  const [importStatus,setImportStatus] = useState("");
   const toastTimer = useRef(null);
   const monthRequest = useRef(0);
 
@@ -620,8 +582,9 @@ function Finance() {
   const byCat = useMemo(() => {
     const map = {};
     dashboardMonth.forEach(e => {
-      if (!map[e.category]) map[e.category] = { income:0, expense:0 };
-      map[e.category][e.type==="income"?"income":"expense"] += Number(e.amount);
+      const category=dashboardCategory(e);
+      if (!map[category]) map[category] = { income:0, expense:0 };
+      map[category][e.type==="income"?"income":"expense"] += Number(e.amount);
     });
     return map;
   }, [dashboardMonth]);
@@ -629,7 +592,7 @@ function Finance() {
   const pieData = Object.entries(byCat).filter(([,v])=>v.expense>0).map(([name,v])=>({ name, value:v.expense })).sort((a,b)=>b.value-a.value);
   const barData = Object.entries(byCat).map(([name,v])=>({ name, Receita:v.income, Despesa:v.expense })).sort((a,b)=>b.Despesa-a.Despesa);
 
-  const detailEntries = dashboardMonth.filter(e=>e.category===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const detailEntries = dashboardMonth.filter(e=>dashboardCategory(e)===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 
   // Budget alerts
   const budgetAlerts = useMemo(() => Object.entries(budgets).map(([cat,lim])=>{ const spent=byCat[cat]?.expense||0; const ratio=spent/lim; return { cat, lim, spent, ratio }; }).filter(b=>b.ratio>=0.7).sort((a,b)=>b.ratio-a.ratio), [budgets,byCat]);
@@ -719,6 +682,7 @@ function Finance() {
   const handleFileImport = async (e) => {
     const file=e.target.files?.[0];e.target.value="";
     if(!file)return;
+    setImportStatus("Lendo extrato… aguarde a revisão antes de confirmar.");
     try{
       let items=[];
       const format=await detectImportFormat(file);
@@ -734,7 +698,8 @@ function Finance() {
         allEntries.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
         reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
-    }catch(err){showToast(err.message||"Erro ao ler o arquivo.");}
+      setImportStatus(`${items.length} movimentações lidas. Revise e confirme a importação; nada foi salvo ainda.`);
+    }catch(err){setImportStatus(err.message||"Erro ao ler o arquivo.");showToast(err.message||"Erro ao ler o arquivo.");}
   };
 
   const handleImportConfirm = async () => {
@@ -752,6 +717,7 @@ function Finance() {
     await loadMonth(); await loadAll();
     showToast(`${result.inserted} novos; ${result.reconciled || 0} conciliados; ${result.skipped} ignorados ✓`);
     setImportItems(null);
+    setImportStatus(`Importação concluída: ${result.inserted} novos, ${result.reconciled || 0} conciliados e ${result.skipped} ignorados.`);
   };
 
   const saveSafely = async (operation) => {
@@ -833,6 +799,7 @@ function Finance() {
         })}>Autorizar conexão</button>
         <button style={{...S.btn(false),marginLeft:12}} onClick={()=>location.assign(location.pathname)}>Cancelar</button>
       </div>}
+      {importStatus && <p role="status" style={{padding:"12px 24px",color:"#aab9cb"}}>{importStatus}</p>}
       {/* ── NAV ── */}
       <div style={{ background:"#19222e", borderBottom:"1px solid #35465c" }}>
         <div style={{ maxWidth:"1100px", margin:"0 auto", display:"flex" }}>

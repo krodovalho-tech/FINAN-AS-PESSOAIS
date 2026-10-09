@@ -33,3 +33,8 @@ export function travelPayload(entry) {
   return { ...payload, notes: value ? PREFIX + JSON.stringify({ destination: value }) + '\n' + notes : notes };
 }
 
+
+// Dashboard groups linked expenses once; stored financial categories remain intact.
+export function dashboardCategory(entry) {
+  return entry.type === 'expense' && travelDetails(entry).destination ? 'Viagem' : entry.category;
+}
