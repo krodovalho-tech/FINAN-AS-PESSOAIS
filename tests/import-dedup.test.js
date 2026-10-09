@@ -33,3 +33,11 @@ test('vínculo com conta diferente ou data distante é rejeitado no servidor',as
  const db=pool([target]);await assert.rejects(importBatch([{...incoming,import_action:'match',match_id:1,match_expected:target}],db),/não corresponde/);
  }
 });
+
+test('aliases explícitos da Unicred permitem conciliar sem confundir outras contas', () => {
+  const item = {type:'income',amount:3541,date:'2026-10-08',bank:'Unicred 566 • 1738 • 134279',description:'Crédito de cobrança'};
+  const manual = {...item,id:90,bank:'Unicred • 4279',category:'Aluguéis recebidos',description:'Aluguel'};
+  assert.equal(reconciliationCandidates(item,[manual]).length,1);
+  assert.equal(reconciliationCandidates(item,[{...manual,bank:'Unicred • 9999'}]).length,0);
+  assert.equal(reconciliationCandidates(item,[{...manual,bank:'Caixa • 4279'}]).length,0);
+});

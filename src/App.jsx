@@ -424,7 +424,10 @@ function needsSkipReview(item, existing) {
 
 // ─── IMPORT PREVIEW MODAL ────────────────────────────────────────────────────
 function ImportModal({ show, onClose, items, onConfirm, onChange, existing, saving }) {
+  const [group,setGroup] = useState('pending');
+  useEffect(()=>{if(show)setGroup('pending');},[show]);
   if (!show) return null;
+  const groupOf = e => e.import_action==='pending' ? 'pending' : e.import_action==='skip' ? 'skip' : e.import_action?.startsWith('match:') ? 'match' : 'new';
   const skipped = items.filter(e => e.import_action === 'skip');
   const skippedTotal = type => skipped.filter(e => e.type === type).reduce((sum,e) => sum + Math.round(Number(e.amount)*100), 0)/100;
   return (
@@ -433,14 +436,19 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
         Pré-visualização — {items.length} transações
       </h2>
       <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência, conta, data e valor. Vincular preserva a categoria e a viagem. Não vincule uma compra integral a uma parcela: selecione a parcela correspondente. Pagamento de fatura não soma novamente como despesa. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
-      <p style={{color:'#ffce85',marginBottom:12}}>{items.filter(e=>e.import_action==='pending').length} pendentes de revisão · {items.filter(e=>e.import_action==='skip').length} ignorados · {items.filter(e=>e.import_action?.startsWith('match:')).length} vínculos selecionados. O PDF exige revisão antes de salvar.</p>
+      <p style={{color:'#ffce85',marginBottom:12}}>{items.filter(e=>e.import_action==='pending').length} pendentes de revisão · {items.filter(e=>e.import_action==='skip').length} ignorados · {items.filter(e=>e.import_action?.startsWith('match:')).length} vínculos selecionados. Resolva as dúvidas e confira os novos antes de salvar.</p>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+        {[['pending','Dúvidas'],['new','Novos'],['match','Vínculos'],['skip','Já importados / ignorados'],['all','Todos']].map(([key,label])=><button key={key} style={S.btn(group===key)} onClick={()=>setGroup(key)}>{label} ({key==='all'?items.length:items.filter(e=>groupOf(e)===key).length})</button>)}
+      </div>
+      <p style={{color:'#aab9cb',marginBottom:12}}>Novos lançamentos serão acrescentados ao confirmar. Vincular confere seu registro sem somar novamente e preserva categoria e viagem.</p>
+      {group==='pending' && !items.some(e=>groupOf(e)==='pending') && <p style={{color:'#53d6a0',marginBottom:12}}>Nenhuma dúvida pendente. Confira os novos e os valores ignorados antes de confirmar.</p>}
       {skipped.length > 0 && <section aria-label="Valores fora da importação" style={{border:'1px solid #ffce85',padding:12,borderRadius:8,marginBottom:12}}>
         <strong>Ficarão fora desta importação: {skipped.length} lançamento(s)</strong>
         <p>Receitas: {fmt(skippedTotal('income'))} · Despesas: {fmt(skippedTotal('expense'))}</p>
         <div style={{maxHeight:160,overflowY:'auto'}}>{skipped.map((e,i)=><p key={i} style={{marginTop:8,overflowWrap:'anywhere'}}>{e.date} · {e.description} · {e.type==='income'?'+':'−'}{fmt(e.amount)} — {importedSource(e,existing)?'Origem já importada':'Exclusão manual; origem ainda não registrada'}</p>)}</div>
       </section>}
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
-        {items.map((e,i)=>(
+        {items.map((e,i)=>({e,i})).filter(({e})=>group==='all' || groupOf(e)===group).map(({e,i})=>(
           <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",alignItems:"center",padding:"0.8rem 0",borderBottom:"1px solid #253244",fontSize:"0.85rem" }}>
             <span style={{ color:"#aab9cb" }}>{e.date}</span>
             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }} title={e.description}>{e.description}</span>
@@ -722,7 +730,7 @@ function Finance() {
       setAllEntries(latest);
       setImportItems(items.map(item=>({...item,import_action:
         latest.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
-        reconciliationCandidates(item,latest).length || format==='pdf' || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
+        reconciliationCandidates(item,latest).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
       setImportStatus(`${items.length} movimentações lidas. Revise e confirme a importação; nada foi salvo ainda.`);
     }catch(err){setImportStatus(err.message||"Erro ao ler o arquivo.");showToast(err.message||"Erro ao ler o arquivo.");}
@@ -1021,7 +1029,7 @@ function Finance() {
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
                         <div style={{ fontSize:"0.7rem",color:"#aab9cb",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
-                          <span>{e.category}</span><span>·</span>
+                          <span>{e.category}</span><span>·</span><span>{e.reconciliation?.status==='conciliado'?'✓ Conciliado':e.bank==='Assistente'?'Aguardando extrato':''}</span>
                           {isCardPayment(e) && <span>Quitação do cartão · fora das despesas</span>}
                           {cardDetails(e) && <span>Parcela {cardDetails(e).installment}/{cardDetails(e).count} · compra {fmt(cardDetails(e).total)}</span>}
                           {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
