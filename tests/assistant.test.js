@@ -49,3 +49,9 @@ test('edição repetida é idempotente e registro ausente retorna 404',async()=>
  assert.equal((await call('edit',body,'D'.repeat(43))).statusCode,404);
 });
 
+
+test('registro do assistente estrutura viagem e compra parcelada nas observações',async()=>{
+ globalThis.assistantSql=async(strings,...v)=>{const q=strings.join('');if(q.startsWith('SELECT id FROM assistant'))return {rows:[{id:1}]};if(q.startsWith('INSERT')){const notes=v[5];assert.match(notes,/@finance-travel:{\"destination\":\"Carolina \/ MA\"}/);assert.match(notes,/@finance-card:/);assert.match(notes,/\"total\":1050/);return {rows:[{id:10,type:'expense',category:'Hospedagem',description:v[2],amount:v[3],date:v[4]}]};}return {rows:[]};};
+ const body={type:'expense',category:'Hospedagem',description:'Hospedagem — parcela 1/3 — compra total R$ 1.050,00 — viagem Carolina MA',amount:350,date:'2026-10-09',request_id:'hosp_carolina_1050'};
+ const result=await call('record',body,'D'.repeat(43));assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
+});
