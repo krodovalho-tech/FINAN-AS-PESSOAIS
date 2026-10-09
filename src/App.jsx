@@ -396,7 +396,7 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
       <h2 style={{ margin:"0 0 0.4rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
         Pré-visualização — {items.length} transações
       </h2>
-      <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência. Vincular confirma o lançamento existente, preservando categoria e viagem. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
+      <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência, conta, data e valor. Vincular preserva a categoria e a viagem. Não vincule uma compra integral a uma parcela: selecione a parcela correspondente. Pagamento de fatura não soma novamente como despesa. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
         {items.map((e,i)=>(
           <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",alignItems:"center",padding:"0.8rem 0",borderBottom:"1px solid #253244",fontSize:"0.85rem" }}>
@@ -670,7 +670,7 @@ function Finance() {
       if (!items.length) { showToast("Nenhuma transação encontrada no arquivo"); return; }
       setImportItems(items.map(item=>({...item,import_action:
         allEntries.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
-        reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) ? 'pending' : 'new'
+        reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
     };
     reader.readAsText(file);
@@ -680,6 +680,7 @@ function Finance() {
   const handleImportConfirm = async () => {
     if (!importItems?.length) return;
     if (importItems.some(e=>e.import_action==='pending')) throw new Error('Confira as possíveis correspondências antes de importar.');
+    if (importItems.some(e=>e.import_action==='card_payment' && !/fatura|pagamento.*cart[aã]o/i.test(e.description))) throw new Error('Confirme a quitação do cartão apenas para pagamentos de fatura identificados.');
     const payload = importItems.map(item=>{
       if (!item.import_action?.startsWith('match:')) return item;
       const id=Number(item.import_action.slice(6));
