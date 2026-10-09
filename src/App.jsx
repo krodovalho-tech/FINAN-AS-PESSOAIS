@@ -3,6 +3,7 @@ import { api, request } from "./api.js";
 import { travelDetails } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { normalizeImport } from "./import.js";
+import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlusCircle, Trash2, TrendingUp, TrendingDown, DollarSign, BarChart3,
@@ -195,7 +196,7 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
   const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState("");
   useEffect(()=>{if(show){setDestination("");setStartDate("");}},[show]);
   const totals={};
-  entries.filter(e=>e.type==="expense").forEach(e=>{const d=travelDetails(e).destination;if(d)totals[d]=(totals[d]||0)+Number(e.amount);});
+  purchaseCosts(entries).forEach(e=>{const d=travelDetails(e).destination;if(d)totals[d]=(totals[d]||0)+Number(e.amount);});
   const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(totals)])];
   return <Modal show={show} onClose={onClose}>
     <h2 style={{color:"#75b8ff",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
@@ -205,7 +206,7 @@ function TripsModal({show,onClose,trips,entries,onSave,saving}) {
       <label style={S.label}>Partida (opcional)<input aria-label="Data de partida" type="date" style={S.input} value={startDate} onChange={e=>setStartDate(e.target.value)}/></label>
       <button style={S.btn(true)} disabled={saving || !destination.trim()} type="submit">{saving?"Salvando…":"Cadastrar destino"}</button>
     </form>
-    <p style={{...S.label,marginTop:24,marginBottom:12}}>Despesas acumuladas por destino · todos os meses</p>
+    <p style={{...S.label,marginTop:24,marginBottom:12}}>Custo total por destino · compras completas, incluindo parcelas futuras</p>
     {!destinations.length && <p style={{color:"#aab9cb"}}>Nenhum destino cadastrado.</p>}
     {destinations.map(d=>{const trip=trips.find(t=>t.destination===d);return <div key={d} style={{padding:"12px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}><strong>{d}</strong><div style={{color:"#aab9cb",marginTop:4}}>{trip?.start_date && <>Partida: {new Date(trip.start_date+"T12:00:00").toLocaleDateString("pt-BR")} · </>}Despesas: {fmt(totals[d] || 0)}</div></div>;})}
   </Modal>;
@@ -240,6 +241,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
   const [form, setForm] = useState(normalizeEntryForm(initial,today));
   useEffect(() => { setForm(normalizeEntryForm(initial,today)); },[initial,show]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const card = cardDetails(initial);
   const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && !saving;
   return (
     <Modal show={show} onClose={onClose}>
@@ -265,7 +267,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.6rem" }}>
           <div>
-            <label style={S.label}>Valor (R$)</label>
+          <label style={S.label}>{form.cardPurchase ? 'Valor total da compra (R$)' : card ? 'Valor desta parcela (R$)' : 'Valor (R$)'}</label>
             <input type="number" step="0.01" min="0" value={form.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00" style={S.input} onKeyDown={e=>e.key==="Enter"&&valid&&onSave(form)}/>
           </div>
           <div>
@@ -273,8 +275,18 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
             <input type="date" value={form.date} onChange={e=>set("date",e.target.value)} style={S.input}/>
           </div>
         </div>
+        {card && <p style={{color:'#75b8ff'}}>Parcela {card.installment}/{card.count} · total da compra {fmt(card.total)}. O total completo aparece em Viagens.</p>}
+        {!isEdit && form.type==='expense' && <>
+          <label style={{color:'#aab9cb'}}><input type="checkbox" checked={!!form.cardPurchase} onChange={e=>set('cardPurchase',e.target.checked)}/> Compra no cartão (parcelas mensais)</label>
+          {form.cardPurchase && <div style={{display:'grid',gap:10}}>
+            <label style={S.label}>Cartão<input style={S.input} value={form.cardName || ''} onChange={e=>set('cardName',e.target.value)} placeholder="Nome do cartão / últimos 4 dígitos"/></label>
+            <label style={S.label}>Quantidade de parcelas<input style={S.input} type="number" min="1" max="60" value={form.installmentCount || 1} onChange={e=>set('installmentCount',Number(e.target.value))}/></label>
+            <label style={S.label}>Data da compra<input style={S.input} type="date" value={form.purchase_date || form.date} onChange={e=>set('purchase_date',e.target.value)}/></label>
+            <p style={{color:'#aab9cb'}}>A Data acima indica a primeira fatura. O total da compra entra uma vez na viagem; as parcelas entram nos respectivos meses.</p>
+          </div>}
+        </>}
         <label style={{ display:"flex",alignItems:"center",gap:"0.5rem",cursor:"pointer",color:"#aab9cb",fontSize:"0.82rem" }}>
-          <input type="checkbox" disabled={form.bank==="Recorrência" || saving} checked={form.recurring} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#75b8ff" }}/>
+          <input type="checkbox" disabled={form.bank==="Recorrência" || saving || form.cardPurchase || !!card} checked={form.recurring && !form.cardPurchase && !card} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#75b8ff" }}/>
           {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (aparece automaticamente nos meses seguintes)"}
         </label>
         <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#75b8ff":"#253244",color:valid?"#10151d":"#8fa2bb",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
@@ -321,17 +333,17 @@ function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
 }
 
 // ─── IMPORT PREVIEW MODAL ────────────────────────────────────────────────────
-function ImportModal({ show, onClose, items, onConfirm, onChange }) {
+function ImportModal({ show, onClose, items, onConfirm, onChange, existing, saving }) {
   if (!show) return null;
   return (
     <Modal show={show} onClose={onClose} maxWidth={680}>
       <h2 style={{ margin:"0 0 0.4rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
         Pré-visualização — {items.length} transações
       </h2>
-      <p style={{ fontSize:"0.75rem",color:"#8fa2bb",marginBottom:"1rem" }}>Ajuste as categorias antes de importar.</p>
+      <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência. Vincular confirma o lançamento existente, preservando categoria e viagem. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
         {items.map((e,i)=>(
-          <div key={i} style={{ display:"grid",gridTemplateColumns:"90px 1fr 130px 90px",gap:"6px",alignItems:"center",padding:"0.4rem 0",borderBottom:"1px solid #253244",fontSize:"0.78rem" }}>
+          <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",alignItems:"center",padding:"0.8rem 0",borderBottom:"1px solid #253244",fontSize:"0.85rem" }}>
             <span style={{ color:"#aab9cb" }}>{e.date}</span>
             <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }} title={e.description}>{e.description}</span>
             <select value={e.category} onChange={ev=>onChange(i,"category",ev.target.value)} style={{ ...S.input,marginTop:0,padding:"0.25rem 0.4rem",fontSize:"0.75rem" }}>
@@ -340,13 +352,20 @@ function ImportModal({ show, onClose, items, onConfirm, onChange }) {
             <span style={{ color:e.type==="income"?"#53d6a0":"#ff929b",textAlign:"right",fontWeight:"600" }}>
               {e.type==="income"?"+":"-"}{fmt(e.amount)}
             </span>
+            <label style={{gridColumn:'1 / -1'}}>Tratamento na importação
+              <select aria-label={`Conciliar ${e.description}`} style={S.input} value={e.import_action || 'new'} onChange={ev=>onChange(i,'import_action',ev.target.value)}>
+                <option value="pending">Escolha antes de salvar</option><option value="new">Cadastrar como novo gasto / receita</option><option value="skip">Ignorar esta linha / já importada</option>
+                {e.type==='expense' && <option value="card_payment">Quitação da fatura (sem nova despesa)</option>}
+                {reconciliationCandidates(e,existing).map(t=><option key={t.id} value={`match:${t.id}`}>Vincular: {String(t.date).slice(0,10)} · {t.description} · {fmt(t.amount)}</option>)}
+              </select>
+            </label>
           </div>
         ))}
       </div>
       <div style={{ display:"flex",gap:"0.6rem" }}>
         <button onClick={onClose} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-        <button onClick={onConfirm} style={{ flex:2,background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
-          Importar {items.length} lançamentos
+        <button onClick={onConfirm} disabled={saving || items.some(e=>e.import_action==='pending')} style={{ flex:2,background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
+          {saving ? 'Salvando…' : 'Confirmar importação e conciliação'}
         </button>
       </div>
     </Modal>
@@ -442,7 +461,7 @@ function Finance() {
 
   // ── Computed values ──
   const totalIncome  = useMemo(() => entries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0), [entries]);
-  const totalExpense = useMemo(() => entries.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0), [entries]);
+  const totalExpense = useMemo(() => entries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((s,e)=>s+Number(e.amount),0), [entries]);
   const balance      = totalIncome - totalExpense;
   const savingsRate  = totalIncome>0 ? ((balance/totalIncome)*100).toFixed(1) : 0;
 
@@ -451,7 +470,7 @@ function Finance() {
   const prevY = month===0?year-1:year;
   const prevEntries = useMemo(() => allEntries.filter(e=>{ const d=new Date(e.date+"T12:00:00"); return d.getMonth()===prevM && d.getFullYear()===prevY; }), [allEntries,prevM,prevY]);
   const prevIncome  = prevEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
-  const prevExpense = prevEntries.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0);
+  const prevExpense = prevEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((s,e)=>s+Number(e.amount),0);
 
   const delta = (curr, prev) => {
     if (!prev) return null;
@@ -469,7 +488,7 @@ function Finance() {
       result.push({
         name: MONTHS[m2].slice(0,3),
         Receitas: mes.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0),
-        Despesas: mes.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0),
+        Despesas: mes.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((s,e)=>s+Number(e.amount),0),
       });
     }
     return result;
@@ -478,7 +497,7 @@ function Finance() {
   // By category
   const byCat = useMemo(() => {
     const map = {};
-    entries.forEach(e => {
+    entries.filter(e=>!isCardPayment(e)).forEach(e => {
       if (!map[e.category]) map[e.category] = { income:0, expense:0 };
       map[e.category][e.type==="income"?"income":"expense"] += Number(e.amount);
     });
@@ -495,7 +514,7 @@ function Finance() {
 
   // Biggest expense
   const biggestExpense = useMemo(() => {
-    const exp = entries.filter(e=>e.type==="expense");
+    const exp = entries.filter(e=>e.type==="expense" && !isCardPayment(e));
     return exp.reduce((max,e)=>Number(e.amount)>Number(max?.amount||0)?e:max, null);
   }, [entries]);
 
@@ -527,6 +546,12 @@ function Finance() {
       setAllEntries(prev=>prev.map(e=>e.id===form.id?updated:e));
       await loadMonth(); await loadAll();
       showToast("Lançamento atualizado ✓");
+    } else if (form.cardPurchase) {
+      const id = form.purchaseId || crypto.randomUUID();
+      form.purchaseId = id;
+      const result = await api.bulkInsert(installmentSchedule(form, Number(form.installmentCount || 1), form.cardName, id));
+      await loadMonth(); await loadAll();
+      showToast(`${result.inserted} parcelas registradas; total da compra separado em Viagens ✓`);
     } else {
       const created = await api.addEntry(form);
       await loadMonth();
@@ -584,7 +609,10 @@ function Finance() {
         } catch (err) { showToast(err.message); return; }
       }
       if (!items.length) { showToast("Nenhuma transação encontrada no arquivo"); return; }
-      setImportItems(items);
+      setImportItems(items.map(item=>({...item,import_action:
+        allEntries.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
+        reconciliationCandidates(item,allEntries).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) ? 'pending' : 'new'
+      })));
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -592,9 +620,17 @@ function Finance() {
 
   const handleImportConfirm = async () => {
     if (!importItems?.length) return;
-    const result = await api.bulkInsert(importItems);
+    if (importItems.some(e=>e.import_action==='pending')) throw new Error('Confira as possíveis correspondências antes de importar.');
+    const payload = importItems.map(item=>{
+      if (!item.import_action?.startsWith('match:')) return item;
+      const id=Number(item.import_action.slice(6));
+      const entry=allEntries.find(e=>e.id===id);
+      if (!entry) throw new Error('Atualize os lançamentos antes de conciliar.');
+      return {...item,import_action:'match',match_id:id,match_expected:{type:entry.type,category:entry.category,description:entry.description,amount:Number(entry.amount),date:String(entry.date).slice(0,10)}};
+    });
+    const result = await api.bulkInsert(payload);
     await loadMonth(); await loadAll();
-    showToast(`${result.inserted} lançamentos salvos; ${result.skipped} já existentes ✓`);
+    showToast(`${result.inserted} novos; ${result.reconciled || 0} conciliados; ${result.skipped} ignorados ✓`);
     setImportItems(null);
   };
 
@@ -687,6 +723,12 @@ function Finance() {
       </div>
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
+        <p style={{color:'#aab9cb',marginBottom:16}}>Orçamento mensal · valores das parcelas do mês. Em Viagens, veja o custo completo das compras.</p>
+        {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>
+          <p style={S.label}>Custo total das viagens · todos os meses</p>
+          {knownTrips.map(t=><p key={t.destination} style={{marginTop:10}}>{t.destination}: <strong style={{color:'#75b8ff'}}>{fmt(purchaseCosts(allEntries).filter(e=>travelDetails(e).destination===t.destination).reduce((sum,e)=>sum+Number(e.amount),0))}</strong></p>)}
+          {!knownTrips.length && <p>Selecione um destino ao lançar a despesa.</p>}
+        </div>}
 
         {/* ── KPIs ── */}
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
@@ -862,6 +904,8 @@ function Finance() {
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
                         <div style={{ fontSize:"0.7rem",color:"#aab9cb",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
                           <span>{e.category}</span><span>·</span>
+                          {isCardPayment(e) && <span>Quitação do cartão · fora das despesas</span>}
+                          {cardDetails(e) && <span>Parcela {cardDetails(e).installment}/{cardDetails(e).count} · compra {fmt(cardDetails(e).total)}</span>}
                           {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
                           {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
@@ -885,7 +929,7 @@ function Finance() {
             </div>
             {entries.length>0 && (
               <p style={{ fontSize:"0.72rem",color:"#8fa2bb",textAlign:"right",marginTop:"0.5rem" }}>
-                {filtered.length} lançamento(s) · Despesas: {fmt(filtered.filter(e=>e.type==="expense").reduce((t,e)=>t+Number(e.amount),0))} · Receitas: {fmt(filtered.filter(e=>e.type==="income").reduce((t,e)=>t+Number(e.amount),0))}
+                {filtered.length} lançamento(s) · Despesas: {fmt(filtered.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((t,e)=>t+Number(e.amount),0))} · Receitas: {fmt(filtered.filter(e=>e.type==="income").reduce((t,e)=>t+Number(e.amount),0))}
               </p>
             )}
           </div>
@@ -910,7 +954,7 @@ function Finance() {
       <Modal show={detailCategory!==null} onClose={()=>setDetailCategory(null)} maxWidth={600}>
         <h2 style={{fontSize:"1.1rem",marginBottom:8,overflowWrap:"anywhere"}}>{detailCategory}</h2>
         <p style={{color:"#b6c4d6",marginBottom:16}}>{MONTHS[month]} / {year} · {detailEntries.length} lançamento(s)</p>
-        <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense").reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
+        <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
         <div style={{maxHeight:"55vh",overflowY:"auto"}}>
           {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
           {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
@@ -935,7 +979,7 @@ function Finance() {
       </Modal>
 
       {/* Import preview */}
-      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} onConfirm={()=>saveSafely(handleImportConfirm)}
+      <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} existing={allEntries} saving={saving} onConfirm={()=>saveSafely(handleImportConfirm)}
         onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v}:e))}/>
     </div>
   );
@@ -965,4 +1009,5 @@ export default function App() {
     </form>
   </main>;
 }
+
 

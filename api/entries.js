@@ -1,6 +1,7 @@
 import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
 import { validEntry } from '../lib/entry-validation.js';
+import { importBatch } from '../lib/import-batch.js';
 
 
 
@@ -112,16 +113,16 @@ export default async function handler(req, res) {
       }
       const valid = bulk.every(e => ['income','expense'].includes(e.type) && typeof e.category === 'string' && e.category.length <= 60 && typeof e.description === 'string' && e.description.trim() && Number.isFinite(Number(e.amount)) && Number(e.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''));
       if (!valid || bulk.length > 5000) return res.status(400).json({ error: 'Importação inválida. Revise os lançamentos.' });
-      // Um único comando: falhas não deixam uma importação parcial.
-      const payload = JSON.stringify(bulk.map(e=>({ ...e, amount:Number(e.amount), recurring:!!e.recurring, source_id:e.source_id || null, bank:e.bank || null, confirmed:e.confirmed === true, reconciliation:e.reconciliation || null })));
-      const { rows } = await sql`
-        INSERT INTO entries (type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation)
-        SELECT type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation
-        FROM jsonb_to_recordset(${payload}::jsonb) AS x(type text, category text, description text, amount numeric, date date, recurring boolean, notes text, source_id text, bank text, confirmed boolean, reconciliation jsonb)
-        ON CONFLICT (bank, source_id) WHERE source_id IS NOT NULL AND bank IS NOT NULL DO NOTHING
-        RETURNING *
-      `;
-      return res.status(201).json({ inserted:rows.length, skipped:bulk.length-rows.length, entries:normalizeRows(rows) });
+      if (bulk.some(e => e.match_id && (!Number.isSafeInteger(e.match_id) || e.match_id < 1 || !e.match_expected))) return res.status(400).json({ error: 'Vínculo de conciliação inválido.' });
+      if (bulk.some(e => e.import_action && !['new','skip','match','card_payment'].includes(e.import_action))) return res.status(400).json({ error: 'Ação de importação inválida.' });
+      if (bulk.some(e => e.import_action === 'match' && !e.match_id || e.import_action === 'card_payment' && e.type !== 'expense')) return res.status(400).json({ error: 'Confira o vínculo ou a quitação do cartão.' });
+      try {
+        const result = await importBatch(bulk);
+        return res.status(201).json({ ...result, entries: normalizeRows(result.entries) });
+      } catch (err) {
+        if (/parcela|fatura|vinculad|prévia/.test(err.message)) return res.status(409).json({ error: err.message });
+        throw err;
+      }
     }
 
     res.status(405).json({ error: 'Method not allowed' });
@@ -130,5 +131,6 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Não foi possível acessar o banco. Verifique a conexão e a configuração das tabelas.' });
   }
 }
+
 
 

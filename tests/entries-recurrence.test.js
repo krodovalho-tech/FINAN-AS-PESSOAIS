@@ -25,6 +25,7 @@ test('edição valida antes do SQL e devolve data utilizável no formulário',as
  const source=(await readFile(new URL('../api/entries.js',import.meta.url),'utf8'))
  .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.entriesSql(...args);")
  .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/import-batch.js'",JSON.stringify(new URL('../lib/import-batch.js',import.meta.url).href))
  .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
  const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  let calls=0;globalThis.entriesSql=async()=>{calls++;return {rows:[{id:5,date:'2026-11-06T00:00:00.000Z',amount:'24.90'}]};};
@@ -37,6 +38,7 @@ test('aplicação mensal normaliza datas do banco, conta repetidos e rejeita mê
  const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
  .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.recurringSql(...args);")
  .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/import-batch.js'",JSON.stringify(new URL('../lib/import-batch.js',import.meta.url).href))
  .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
  const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  let calls=0;const processed=new Set();
@@ -59,6 +61,7 @@ test('encerrar pela cópia identifica a série original e protege pagamentos con
  const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
  .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.stopSql(...args);")
  .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/import-batch.js'",JSON.stringify(new URL('../lib/import-batch.js',import.meta.url).href))
  .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
  const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  let count=0;globalThis.stopSql=async(strings,...values)=>{
@@ -78,6 +81,7 @@ test('edição da série valida campos e atualiza somente previsões não confir
  const source=(await readFile(new URL('../api/recurring.js',import.meta.url),'utf8'))
  .replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.editSeriesSql(...args);")
  .replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;")
+ .replace("'../lib/import-batch.js'",JSON.stringify(new URL('../lib/import-batch.js',import.meta.url).href))
  .replace("'../lib/entry-validation.js'",JSON.stringify(new URL('../lib/entry-validation.js',import.meta.url).href));
  const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  let calls=0;globalThis.editSeriesSql=async(strings,...values)=>{calls++;const query=strings.join('');assert.match(query,/confirmed IS NOT TRUE/);assert.match(query,/LEAST/);assert.match(query,/bank='Recorrência'/);assert.ok(values.includes('42:%'));return {rows:[{updated:1,forecasts:2}]};};
@@ -87,3 +91,4 @@ test('edição da série valida campos e atualiza somente previsões não confir
  assert.deepEqual((await call(entry)).data,{ok:true,updated:1,forecasts:2});
  globalThis.editSeriesSql=async()=>({rows:[{updated:0,forecasts:0}]});assert.equal((await call(entry)).code,404);
 });
+

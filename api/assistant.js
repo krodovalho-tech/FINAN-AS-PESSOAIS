@@ -1,6 +1,7 @@
 import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
+import { isCardPayment } from '../lib/card.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
@@ -37,10 +38,10 @@ export default async function handler(req,res) {
     if (action==='summary' && req.method==='GET') {
       const year=Number(req.query.year),month=Number(req.query.month);
       if (!Number.isInteger(year)||year<2000||year>2200||!Number.isInteger(month)||month<1||month>12) return res.status(400).json({error:'Informe mês e ano válidos.'});
-      const {rows}=await sql`SELECT id,type,category,description,amount,date,bank,source_id FROM entries WHERE EXTRACT(YEAR FROM date)=${year} AND EXTRACT(MONTH FROM date)=${month} ORDER BY amount DESC,id DESC`;
+      const {rows}=await sql`SELECT id,type,category,description,amount,date,bank,source_id,reconciliation FROM entries WHERE EXTRACT(YEAR FROM date)=${year} AND EXTRACT(MONTH FROM date)=${month} ORDER BY amount DESC,id DESC`;
       let income=0,expense=0;const categories=Object.create(null);
-      for(const e of rows){const cents=Math.round(Number(e.amount)*100);if(e.type==='income')income+=cents;else{expense+=cents;categories[e.category]=(categories[e.category]||0)+cents;}}
-      return res.status(200).json({year,month,count:rows.length,income:income/100,expense:expense/100,balance:(income-expense)/100,expensesByCategory:Object.entries(categories).map(([category,cents])=>({category,amount:cents/100})).sort((a,b)=>b.amount-a.amount),largestExpenses:rows.filter(e=>e.type==='expense').slice(0,5)});
+      for(const e of rows){if(isCardPayment(e))continue;const cents=Math.round(Number(e.amount)*100);if(e.type==='income')income+=cents;else{expense+=cents;categories[e.category]=(categories[e.category]||0)+cents;}}
+      return res.status(200).json({year,month,count:rows.length,income:income/100,expense:expense/100,balance:(income-expense)/100,expensesByCategory:Object.entries(categories).map(([category,cents])=>({category,amount:cents/100})).sort((a,b)=>b.amount-a.amount),largestExpenses:rows.filter(e=>e.type==='expense' && !isCardPayment(e)).slice(0,5)});
     }
 
     if (action==='entries' && req.method==='GET') {
@@ -88,4 +89,5 @@ export default async function handler(req,res) {
     return res.status(405).json({error:'Operação não permitida.'});
   } catch(err) {console.error('assistant',err.code || err.name);return res.status(500).json({error:'Não foi possível acessar o banco. Nenhuma confirmação de gravação disponível.'});}
 }
+
 

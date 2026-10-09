@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const hash=x=>createHash('sha256').update(x).digest('hex');
-const text=(await readFile(new URL('../api/assistant.js',import.meta.url),'utf8')).replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.assistantSql(...args);").replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;");
+const text=(await readFile(new URL('../api/assistant.js',import.meta.url),'utf8')).replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.assistantSql(...args);").replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;").replace("'../lib/card.js'",JSON.stringify(new URL('../lib/card.js',import.meta.url).href));
 const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`);
 async function call(action,body,token){const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(data){this.data=data;return this;}};await handler({method:'POST',query:{action},body,headers:{authorization:token?`Bearer ${token}`:undefined}},res);return res;}
 test('troca exige prova, aceita uma vez e rejeita replay',async()=>{
@@ -48,3 +48,4 @@ test('edição repetida é idempotente e registro ausente retorna 404',async()=>
  globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:[]});
  assert.equal((await call('edit',body,'D'.repeat(43))).statusCode,404);
 });
+
