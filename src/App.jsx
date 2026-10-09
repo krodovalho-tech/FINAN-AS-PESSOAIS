@@ -412,9 +412,21 @@ function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
   );
 }
 
+// A skipped row is safe automatically only when its exact source was imported.
+function importedSource(item, existing) {
+  return !!(item.bank && item.source_id && existing.some(e =>
+    (e.bank === item.bank && e.source_id === item.source_id) ||
+    e.reconciliation?.imports?.some(s => s.bank === item.bank && s.source_id === item.source_id)));
+}
+function needsSkipReview(item, existing) {
+  return item.import_action === 'skip' && !importedSource(item, existing) && item.skip_acknowledged !== true;
+}
+
 // ─── IMPORT PREVIEW MODAL ────────────────────────────────────────────────────
 function ImportModal({ show, onClose, items, onConfirm, onChange, existing, saving }) {
   if (!show) return null;
+  const skipped = items.filter(e => e.import_action === 'skip');
+  const skippedTotal = type => skipped.filter(e => e.type === type).reduce((sum,e) => sum + Math.round(Number(e.amount)*100), 0)/100;
   return (
     <Modal show={show} onClose={onClose} maxWidth={680}>
       <h2 style={{ margin:"0 0 0.4rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
@@ -422,6 +434,11 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
       </h2>
       <p style={{ fontSize:"0.85rem",color:"#aab9cb",marginBottom:"1rem" }}>Confira cada possível correspondência, conta, data e valor. Vincular preserva a categoria e a viagem. Não vincule uma compra integral a uma parcela: selecione a parcela correspondente. Pagamento de fatura não soma novamente como despesa. Quitação da fatura fica no histórico e não soma novamente como despesa.</p>
       <p style={{color:'#ffce85',marginBottom:12}}>{items.filter(e=>e.import_action==='pending').length} pendentes de revisão · {items.filter(e=>e.import_action==='skip').length} ignorados · {items.filter(e=>e.import_action?.startsWith('match:')).length} vínculos selecionados. O PDF exige revisão antes de salvar.</p>
+      {skipped.length > 0 && <section aria-label="Valores fora da importação" style={{border:'1px solid #ffce85',padding:12,borderRadius:8,marginBottom:12}}>
+        <strong>Ficarão fora desta importação: {skipped.length} lançamento(s)</strong>
+        <p>Receitas: {fmt(skippedTotal('income'))} · Despesas: {fmt(skippedTotal('expense'))}</p>
+        <div style={{maxHeight:160,overflowY:'auto'}}>{skipped.map((e,i)=><p key={i} style={{marginTop:8,overflowWrap:'anywhere'}}>{e.date} · {e.description} · {e.type==='income'?'+':'−'}{fmt(e.amount)} — {importedSource(e,existing)?'Origem já importada':'Exclusão manual; origem ainda não registrada'}</p>)}</div>
+      </section>}
       <div style={{ maxHeight:"50vh",overflowY:"auto",marginBottom:"1rem" }}>
         {items.map((e,i)=>(
           <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",alignItems:"center",padding:"0.8rem 0",borderBottom:"1px solid #253244",fontSize:"0.85rem" }}>
@@ -441,12 +458,16 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
                 {reconciliationCandidates(e,existing).map(t=><option key={t.id} value={`match:${t.id}`}>Vincular: {String(t.date).slice(0,10)} · {t.description} · {fmt(t.amount)}</option>)}
               </select>
             </label>
+            {e.import_action==='skip' && !importedSource(e,existing) && <div role="alert" style={{gridColumn:'1 / -1',color:'#ffce85'}}>
+              <p>{reconciliationCandidates(e,existing).length ? 'Há possível correspondência, mas esta linha ainda não foi vinculada. Prefira Vincular se for o mesmo lançamento.' : 'Atenção: nenhum lançamento correspondente foi encontrado. Este valor ficará fora do controle financeiro.'}</p>
+              <label style={{display:'flex',gap:8,alignItems:'flex-start',marginTop:8}}><input type="checkbox" checked={e.skip_acknowledged===true} onChange={ev=>onChange(i,'skip_acknowledged',ev.target.checked)}/>Confirmo que quero deixar {fmt(e.amount)} fora desta importação.</label>
+            </div>}
           </div>
         ))}
       </div>
       <div style={{ display:"flex",gap:"0.6rem" }}>
         <button onClick={onClose} style={{ flex:1,...S.btn(false),padding:"0.7rem" }}>Cancelar</button>
-        <button onClick={onConfirm} disabled={saving || items.some(e=>e.import_action==='pending')} style={{ flex:2,background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
+        <button onClick={onConfirm} disabled={saving || items.some(e=>e.import_action==='pending' || needsSkipReview(e,existing))} style={{ flex:2,background:"#75b8ff",color:"#10151d",border:"none",borderRadius:"8px",padding:"0.7rem",fontWeight:"600",cursor:"pointer" }}>
           {saving ? 'Salvando…' : 'Confirmar importação e conciliação'}
         </button>
       </div>
@@ -711,6 +732,7 @@ function Finance() {
     if (!importItems?.length) return;
     if (importItems.some(e=>e.import_action==='pending')) throw new Error('Confira as possíveis correspondências antes de importar.');
     if (importItems.some(e=>e.import_action==='card_payment' && !/fatura|pagamento.*cart[aã]o/i.test(e.description))) throw new Error('Confirme a quitação do cartão apenas para pagamentos de fatura identificados.');
+    if (importItems.some(e=>needsSkipReview(e,allEntries))) throw new Error('Confirme os valores que ficarão fora da importação ou altere o tratamento.');
     const payload = importItems.map(item=>{
       if (!item.import_action?.startsWith('match:')) return item;
       const id=Number(item.import_action.slice(6));
@@ -1077,7 +1099,7 @@ function Finance() {
 
       {/* Import preview */}
       <ImportModal show={!!importItems} onClose={()=>setImportItems(null)} items={importItems||[]} existing={allEntries} saving={saving} onConfirm={()=>saveSafely(handleImportConfirm)}
-        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v,...(k==='import_action'?{reviewed_new:v==='new'}:{})}:e))}/>
+        onChange={(i,k,v)=>setImportItems(prev=>prev.map((e,idx)=>idx===i?{...e,[k]:v,...(k==='import_action'?{reviewed_new:v==='new',skip_acknowledged:false}:{})}:e))}/>
     </div>
   );
 }
