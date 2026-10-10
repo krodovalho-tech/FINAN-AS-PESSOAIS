@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { travelDetails, travelPayload, normalizeDestination } from '../src/travel.js';
+import { travelDetails, travelPayload, normalizeDestination, dashboardCategory } from '../src/travel.js';
 import { normalizeEntryForm } from '../src/entry-form.js';
 import { normalizeImport } from '../src/import.js';
 import { recurringPayload } from '../lib/entry-validation.js';
@@ -48,4 +48,11 @@ test('descrições de voz e chat vinculam alimentação sem confundir pagamento 
   }
   assert.equal(travelDetails({description:'Alimentação Carolina'}).destination,'');
   assert.equal(travelDetails(travelPayload({description:'Alimentação – viagem Carolina/MA',destination:'Palmas/TO'})).destination,'Palmas / TO');
+});
+
+
+test('viagem não substitui a categoria financeira no dashboard mensal',()=>{
+  const entry=travelPayload({type:'expense',category:'Combustível',description:'Abastecimento',amount:187.99,date:'2026-10-10',destination:'Carolina / MA'});
+  assert.equal(travelDetails(entry).destination,'Carolina / MA');
+  assert.equal(dashboardCategory(entry),'Combustível');
 });
