@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { travelDetails, travelPayload, normalizeDestination, dashboardCategory } from '../src/travel.js';
 import { normalizeEntryForm } from '../src/entry-form.js';
 import { normalizeImport } from '../src/import.js';
-import { recurringPayload } from '../lib/entry-validation.js';
+import { recurringPayload, travelGuard } from '../lib/entry-validation.js';
 
 test('destino preserva categoria e observações ao salvar, editar e remover marcação',()=>{
   const form={id:1,type:'expense',category:'Transporte',description:'Combustível',amount:100,date:'2026-10-08',destination:'Cidade / UF',notes:'Observação\nem duas linhas',recurring:true};
@@ -55,4 +55,12 @@ test('viagem não substitui a categoria financeira no dashboard mensal',()=>{
   const entry=travelPayload({type:'expense',category:'Combustível',description:'Abastecimento',amount:187.99,date:'2026-10-10',destination:'Carolina / MA'});
   assert.equal(travelDetails(entry).destination,'Carolina / MA');
   assert.equal(dashboardCategory(entry),'Combustível');
+});
+
+
+test('backend bloqueia viagem sem destino estruturado',()=>{
+  assert.equal(travelGuard({type:'expense',category:'Combustível',description:'Combustível — viagem Carolina/MA'}),false);
+  assert.equal(travelGuard(travelPayload({type:'expense',category:'Combustível',description:'Combustível — viagem Carolina/MA',destination:'Carolina/MA'})),true);
+  assert.equal(travelGuard({type:'expense',category:'Viagem',description:'Hospedagem'}),false);
+  assert.equal(travelGuard({type:'expense',category:'Combustível',description:'Abastecimento comum'}),true);
 });
