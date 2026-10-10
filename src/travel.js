@@ -36,5 +36,8 @@ export function travelPayload(entry) {
 
 // Dashboard groups linked expenses once; stored financial categories remain intact.
 export function dashboardCategory(entry) {
-  return entry.type === 'expense' && travelDetails(entry).destination ? 'Viagem' : entry.category;
+  // Viagem é uma dimensão transversal: o dashboard mensal preserva a natureza
+  // financeira (Combustível, Alimentação, Hospedagem etc.). O custo integral
+  // por destino é calculado separadamente por travelDetails + purchaseCosts.
+  return entry.category;
 }
