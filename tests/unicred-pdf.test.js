@@ -27,10 +27,11 @@ test('extrato Unicred aceita descrições em várias linhas e mudança de págin
  assert.equal(entries[2].type,'expense');
  assert.throws(()=>parseUnicredRows(rows.map(x=>x.replace('R$ 1.525,95','R$ 1.525,94'))),/Divergência/);
 });
-test('dashboard soma viagem sem duplicar e conserva categoria original',()=>{
+test('viagem soma todas as naturezas e dashboard conserva categoria original',()=>{
  const entries=[{type:'expense',category:'Viagem',amount:2180.72,description:'Hotel — viagem Carolina/MA'},{type:'expense',category:'Alimentação',amount:260.70,description:'Almoço — viagem Carolina/MA'},{type:'expense',category:'Alimentação',amount:25.98,description:'Lanche — viagem Carolina/MA'}];
- assert.equal(Math.round(entries.filter(e=>dashboardCategory(e)==='Viagem').reduce((s,e)=>s+e.amount,0)*100),246740);
- assert.equal(entries[1].category,'Alimentação');
+ assert.equal(Math.round(entries.filter(e=>travelDetails(e).destination==='Carolina / MA').reduce((s,e)=>s+e.amount,0)*100),246740);
+ assert.equal(dashboardCategory(entries[1]),'Alimentação');
+ assert.equal(Math.round(entries.filter(e=>dashboardCategory(e)==='Viagem').reduce((s,e)=>s+e.amount,0)*100),218072);
  assert.ok(entries.every(e=>travelDetails(e).destination==='Carolina / MA'));
  assert.equal(dashboardCategory({type:'expense',category:'Alimentação',description:'Almoço SESC'}),'Alimentação');
 });

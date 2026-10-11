@@ -41,3 +41,15 @@ export function dashboardCategory(entry) {
   // por destino é calculado separadamente por travelDetails + purchaseCosts.
   return entry.category;
 }
+
+export function travelCategory(entry) {
+  const category = String(entry.category || "").trim();
+  if (category && !/^viagem$/i.test(category)) return category;
+  const description = String(entry.description || "").toLowerCase();
+  if (/hospedagem|hotel|pousada|diária/.test(description)) return "Hospedagem";
+  if (/combustível|abastecimento|gasolina|etanol|diesel/.test(description)) return "Combustível";
+  if (/alimentação|almoço|jantar|lanche|restaurante|churros|café da manhã/.test(description)) return "Alimentação e lanches";
+  if (/presente|brinde|mimo|lembrancinha/.test(description)) return "Presentes e mimos";
+  if (/entrada|ingresso|passeio|complexo novo banho|parque/.test(description)) return "Passeios";
+  return "Outros / a classificar";
+}

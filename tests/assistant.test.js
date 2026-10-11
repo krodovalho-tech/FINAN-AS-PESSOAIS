@@ -1,9 +1,10 @@
+import {mockPool} from './helpers/mock-pool.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const hash=x=>createHash('sha256').update(x).digest('hex');
-const text=(await readFile(new URL('../api/assistant.js',import.meta.url),'utf8')).replace("import { sql } from '@vercel/postgres';","const sql=(...args)=>globalThis.assistantSql(...args);").replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;").replace("'../lib/card.js'",JSON.stringify(new URL('../lib/card.js',import.meta.url).href)).replace("'../src/travel.js'",JSON.stringify(new URL('../src/travel.js',import.meta.url).href));
+const text=(await readFile(new URL('../api/assistant.js',import.meta.url),'utf8')).replace("import { sql } from '@vercel/postgres';","const sql=Object.assign((...args)=>globalThis.assistantSql(...args),{connect:()=>globalThis.assistantPool.connect()});").replace("import { requireAuth } from '../lib/auth.js';","const requireAuth=()=>true;").replace("'../lib/card.js'",JSON.stringify(new URL('../lib/card.js',import.meta.url).href)).replace("'../lib/verified-record.js'",JSON.stringify(new URL('../lib/verified-record.js',import.meta.url).href)).replace("'../src/travel.js'",JSON.stringify(new URL('../src/travel.js',import.meta.url).href));
 const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(text).toString('base64')}`);
 async function call(action,body,token){const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(data){this.data=data;return this;}};await handler({method:'POST',query:{action},body,headers:{authorization:token?`Bearer ${token}`:undefined}},res);return res;}
 test('troca exige prova, aceita uma vez e rejeita replay',async()=>{
@@ -13,17 +14,10 @@ test('troca exige prova, aceita uma vez e rejeita replay',async()=>{
  const valid=await call('exchange',{code,verifier});assert.equal(valid.statusCode,200);assert.match(valid.data.token,/^[A-Za-z0-9_-]{43}$/);
  assert.equal((await call('exchange',{code,verifier})).statusCode,401);
 });
-test('lançamento repetido conserva o registro e impede reuso com conteúdo diferente',async()=>{
- const entry={id:9,type:'expense',category:'Lanches',description:'Almoço',amount:'24.90',date:'2026-10-07'};
- globalThis.assistantSql=async(strings)=>({rows:strings.join('').startsWith('SELECT id FROM assistant')?[{id:1}]:strings.join('').startsWith('INSERT')?[]:[entry]});
- const body={...entry,amount:24.9,request_id:'almoco_20261007'};
- const duplicate=await call('record',body,'D'.repeat(43));assert.equal(duplicate.statusCode,200);assert.equal(duplicate.data.duplicate,true);
- assert.equal((await call('record',{...body,amount:25},'D'.repeat(43))).statusCode,409);
-});
 test('sem token ou valores inválidos não há confirmação de gravação',async()=>{
  assert.equal((await call('record',{})).statusCode,401);
  globalThis.assistantSql=async()=>({rows:[{id:1}]});
- const invalid=await call('record',{type:'expense',amount:-1},'D'.repeat(43));assert.equal(invalid.statusCode,400);assert.equal(invalid.data.saved,undefined);
+ const invalid=await call('record',{type:'expense',amount:-1},'D'.repeat(43));assert.equal(invalid.statusCode,400);assert.equal(invalid.data.saved,false);
 });
 
 
@@ -50,38 +44,19 @@ test('edição repetida é idempotente e registro ausente retorna 404',async()=>
 });
 
 
-test('registro do assistente estrutura viagem e compra parcelada nas observações',async()=>{
- globalThis.assistantSql=async(strings,...v)=>{const q=strings.join('');if(q.startsWith('SELECT id FROM assistant'))return {rows:[{id:1}]};if(q.startsWith('INSERT')){const notes=v[5];assert.match(notes,/@finance-travel:{\"destination\":\"Carolina \/ MA\"}/);assert.match(notes,/@finance-card:/);assert.match(notes,/\"total\":1050/);return {rows:[{id:10,type:'expense',category:'Hospedagem',description:v[2],amount:v[3],date:v[4]}]};}return {rows:[]};};
- const body={type:'expense',category:'Hospedagem',description:'Hospedagem — parcela 1/3 — compra total R$ 1.050,00 — viagem Carolina MA',amount:350,date:'2026-10-09',request_id:'hosp_carolina_1050'};
- const result=await call('record',body,'D'.repeat(43));assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
+test('record endpoint rejects legacy individual parcels and unauthenticated purchases',async()=>{
+ globalThis.assistantSql=async()=>({rows:[{id:1}]});
+ const r=await call('record',{type:'expense',amount:10,date:'2026-10-10',description:'Tour parcela 1/3',category:'Other',request_id:'legacy-example'},'D'.repeat(43));
+ assert.equal(r.statusCode,400);assert.equal(r.data.saved,false);
+ assert.equal((await call('purchase',{})).statusCode,401);
 });
 
-
-test('alimentação com travessão curto grava destino limpo e mantém categoria e valor',async()=>{
- globalThis.assistantSql=async(strings,...v)=>{
-  if(strings.join('').startsWith('SELECT id FROM assistant')) return {rows:[{id:1}]};
-  assert.equal(v[1],'Alimentação');assert.equal(v[3],260.70);
-  assert.match(v[5],/@finance-travel:{"destination":"Carolina \/ MA"}/);
-  return {rows:[{id:2227,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4]}]};
- };
- const result=await call('record',{type:'expense',category:'Alimentação',description:'Alimentação – viagem Carolina/MA (cartão de crédito)',amount:260.70,date:'2026-10-09',request_id:'alimentacao_carolina_test'},'D'.repeat(43));
- assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
-});
-
-test('assistant persists a shared purchase ID and original month for every parcel',async()=>{
- const cards=[];
- globalThis.assistantSql=async(strings,...v)=>{
-  if(strings.join('').startsWith('SELECT id FROM assistant'))return {rows:[{id:1}]};
-  if(strings.join('').startsWith('INSERT')){
-   cards.push(JSON.parse(v[5].split('\n').find(x=>x.startsWith('@finance-card:')).slice(14)));
-   return {rows:[{id:10,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4]}]};
-  }
-  return {rows:[]};
- };
- for(let i=1;i<=3;i++){
-  const result=await call('record',{type:'expense',category:'Viagem',description:`Tour — parcela ${i}/3 — compra total R$ 100,00`,amount:i===3?33.34:33.33,date:`2026-${9+i}-10`,request_id:`tour-example-p${i}`},'D'.repeat(43));
-  assert.equal(result.data.saved,true);
- }
- assert.equal(new Set(cards.map(c=>c.purchase_id)).size,1);
- assert.deepEqual(cards.map(c=>c.purchase_date),Array(3).fill('2026-10-10'));
+test('authenticated purchase endpoint only confirms after transactional verification',async()=>{
+ globalThis.assistantSql=async()=>({rows:[{id:1}]});globalThis.assistantPool=mockPool();
+ const args={type:'expense',amount:100,date:'2026-10-10',purchase_date:'2026-10-10',description:'Tour',category:'Passeios',installment_count:3,request_id:'endpoint-example'};
+ const result=await call('purchase',args,'D'.repeat(43));
+ assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);assert.equal(result.data.verified,true);assert.equal(result.data.entries.length,3);
+ const repeat=await call('purchase',args,'D'.repeat(43));assert.equal(repeat.statusCode,200);assert.equal(repeat.data.duplicate,true);
+ globalThis.assistantPool=mockPool([],e=>({...e,amount:999}));
+ const bad=await call('purchase',args,'D'.repeat(43));assert.equal(bad.statusCode,409);assert.equal(bad.data.saved,false);assert.equal(globalThis.assistantPool.state().length,0);
 });

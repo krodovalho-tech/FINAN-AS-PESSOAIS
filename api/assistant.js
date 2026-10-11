@@ -1,12 +1,11 @@
 import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
-import { isCardPayment, normalizeAssistantCard } from '../lib/card.js';
-import { destinationFromDescription } from '../src/travel.js';
+import { cardDetails } from '../lib/card.js';
+import { recordVerified, RecordError, auditPurchase, monthlySummary } from '../lib/verified-record.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
-const cardFromDescription = (description,date,source) => { const p=/parcela\s+(\d+)\/(\d+)/i.exec(String(description||'')), t=/compra total R\$\s*([\d.]+,\d{2})/i.exec(String(description||'')); if(!p||!t||+p[1]<1||+p[1]>+p[2]) return null; return normalizeAssistantCard({purchase_id:`assistant:${source}`,installment:+p[1],count:+p[2],total:Number(t[1].replaceAll('.','').replace(',','.')),purchase_date:date,card:''},date); };
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   const action=req.query.action;
@@ -40,24 +39,38 @@ export default async function handler(req,res) {
     if (action==='summary' && req.method==='GET') {
       const year=Number(req.query.year),month=Number(req.query.month);
       if (!Number.isInteger(year)||year<2000||year>2200||!Number.isInteger(month)||month<1||month>12) return res.status(400).json({error:'Informe mês e ano válidos.'});
-      const {rows}=await sql`SELECT id,type,category,description,amount,date,bank,source_id,reconciliation FROM entries WHERE EXTRACT(YEAR FROM date)=${year} AND EXTRACT(MONTH FROM date)=${month} ORDER BY amount DESC,id DESC`;
-      let income=0,expense=0;const categories=Object.create(null);
-      for(const e of rows){if(isCardPayment(e))continue;const cents=Math.round(Number(e.amount)*100);if(e.type==='income')income+=cents;else{expense+=cents;categories[e.category]=(categories[e.category]||0)+cents;}}
-      return res.status(200).json({year,month,count:rows.length,income:income/100,expense:expense/100,balance:(income-expense)/100,expensesByCategory:Object.entries(categories).map(([category,cents])=>({category,amount:cents/100})).sort((a,b)=>b.amount-a.amount),largestExpenses:rows.filter(e=>e.type==='expense' && !isCardPayment(e)).slice(0,5)});
+      const {rows}=await sql`SELECT * FROM entries ORDER BY id`;
+      const installments=monthlySummary(rows,year,month,'installments');
+      const purchases=monthlySummary(rows,year,month,'purchases');
+      return res.status(200).json({...installments,views:{installments,purchases}});
     }
 
     if (action==='entries' && req.method==='GET') {
       const id=Number(req.query.id),year=Number(req.query.year),month=Number(req.query.month);
       if (req.query.id!==undefined) {
         if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:'Identificador inválido.'});
-        const {rows}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE id=${id}`;
-        return res.status(200).json({entries:rows});
+        const {rows}=await sql`SELECT * FROM entries WHERE id=${id}`;
+        const normalize=e=>({...e,date:e.date instanceof Date?e.date.toISOString().slice(0,10):String(e.date).slice(0,10)});
+        const card=rows[0] && cardDetails(normalize(rows[0]));
+        let purchase_verification;
+        if(card) {
+          const all=(await sql`SELECT * FROM entries ORDER BY id`).rows.map(normalize);
+          const ids=all.filter(e=>cardDetails(e)?.purchase_id===card.purchase_id).map(e=>e.id);
+          try { purchase_verification=auditPurchase(all,ids,card.total); }
+          catch(error) { if(!(error instanceof RecordError))throw error;purchase_verification={verified:false,error:error.message}; }
+        }
+        return res.status(200).json({entries:rows,purchase_verification});
       }
       if(!Number.isInteger(year)||year<2000||year>2200||!Number.isInteger(month)||month<1||month>12) return res.status(400).json({error:'Informe mês e ano válidos.'});
       const search=req.query.search || '';
       if(typeof search!=='string'||search.length>1000) return res.status(400).json({error:'Busca inválida.'});
       const {rows}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE EXTRACT(YEAR FROM date)=${year} AND EXTRACT(MONTH FROM date)=${month} AND (${search}='' OR POSITION(LOWER(${search}) IN LOWER(description))>0) ORDER BY date DESC,id DESC LIMIT 100`;
       return res.status(200).json({entries:rows,limit:100});
+    }
+    if (action==='audit' && req.method==='POST') {
+      const {entry_ids,expected_amount,destination}=req.body || {};
+      const {rows}=await sql`SELECT * FROM entries ORDER BY id`;
+      return res.status(200).json(auditPurchase(rows,entry_ids,expected_amount,destination));
     }
     if (action==='edit' && req.method==='POST') {
       const {id,expected,changes}=req.body || {};
@@ -76,20 +89,12 @@ export default async function handler(req,res) {
       if(e.type===next.type && e.category===next.category && e.description===next.description && Number(e.amount)===next.amount && dateText(e.date)===next.date) return res.status(200).json({saved:true,unchanged:true,entry:e});
       return res.status(409).json({error:'O lançamento mudou desde a consulta. Consulte novamente antes de editar.'});
     }
-    if (action==='record' && req.method==='POST') {
-      const e=req.body || {};const amount=Number(e.amount);
-      if(!['income','expense'].includes(e.type)||!Number.isFinite(amount)||amount<=0||amount>9999999999.99||!/^\d{4}-\d{2}-\d{2}$/.test(e.date||'')||typeof e.description!=='string'||!e.description.trim()||e.description.length>1000||typeof e.category!=='string'||!e.category.trim()||e.category.length>60||! /^[A-Za-z0-9_-]{8,100}$/.test(e.request_id||'')) return res.status(400).json({error:'Lançamento inválido. Confira valor, data, descrição, categoria e identificador.'});
-      const source=`${connections[0].id}:${e.request_id}`;
-      const destination=destinationFromDescription(e.description);const card=cardFromDescription(e.description,e.date,source);const metadata=JSON.stringify({origin:'assistant',payment_account:e.payment_account || 'Não informado',reconciliation:'Aguardando conferência com o extrato bancário'});const notes=(destination?`@finance-travel:${JSON.stringify({destination})}\n`:'')+(card?`@finance-card:${JSON.stringify(card)}\n`:'')+metadata;
-      const {rows}=await sql`INSERT INTO entries (type,category,description,amount,date,notes,source_id,bank,confirmed) VALUES (${e.type},${e.category},${e.description},${Math.round(amount*100)/100},${e.date},${notes},${source},'Assistente',TRUE) ON CONFLICT (bank,source_id) WHERE source_id IS NOT NULL AND bank IS NOT NULL DO NOTHING RETURNING id,type,category,description,amount,date`;
-      if(rows.length) return res.status(201).json({saved:true,duplicate:false,entry:rows[0],reconciliation:'Aguardando conferência com o extrato bancário'});
-      const existing=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE bank='Assistente' AND source_id=${source}`;
-      const previous=existing.rows[0];
-      if(!previous || previous.type!==e.type || previous.category!==e.category || previous.description!==e.description || Number(previous.amount)!==Math.round(amount*100)/100 || String(previous.date).slice(0,10)!==e.date) return res.status(409).json({error:'Este identificador já pertence a outro lançamento. Confira o pedido antes de enviar novamente.'});
-      return res.status(200).json({saved:true,duplicate:true,entry:previous});
+    if (['record','purchase'].includes(action) && req.method==='POST') {
+      const result=await recordVerified(req.body,connections[0].id,action==='purchase',sql);
+      return res.status(result.duplicate?200:201).json(result);
     }
     return res.status(405).json({error:'Operação não permitida.'});
-  } catch(err) {console.error('assistant',err.code || err.name);return res.status(500).json({error:'Não foi possível acessar o banco. Nenhuma confirmação de gravação disponível.'});}
+  } catch(err) {if(err instanceof RecordError)return res.status(err.status).json({saved:false,verified:false,error:err.message});console.error('assistant',err.code || err.name);return res.status(500).json({error:'Não foi possível acessar o banco. Nenhuma confirmação de gravação disponível.'});}
 }
 
 

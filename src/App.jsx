@@ -1,7 +1,7 @@
 import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
-import { travelDetails, dashboardCategory } from "./travel.js";
+import { travelDetails, dashboardCategory, travelCategory } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
@@ -216,17 +216,6 @@ function DestinationField({value, onChange, trips}) {
   </label>;
 }
 
-function travelCategory(entry) {
-  const category = String(entry.category || "").trim();
-  if (category && !/^viagem$/i.test(category)) return category;
-  const description = String(entry.description || "").toLowerCase();
-  if (/hospedagem|hotel|pousada|diária/.test(description)) return "Hospedagem";
-  if (/combustível|abastecimento|gasolina|etanol|diesel/.test(description)) return "Combustível";
-  if (/alimentação|almoço|jantar|lanche|restaurante|churros|café da manhã/.test(description)) return "Alimentação e lanches";
-  if (/presente|brinde|mimo|lembrancinha/.test(description)) return "Presentes e mimos";
-  if (/entrada|ingresso|passeio|complexo novo banho|parque/.test(description)) return "Passeios";
-  return "Outros / a classificar";
-}
 
 function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
   const [destination,setDestination]=useState(""),[startDate,setStartDate]=useState(""),[selectedTrip,setSelectedTrip]=useState(""),[selectedCategory,setSelectedCategory]=useState("");
