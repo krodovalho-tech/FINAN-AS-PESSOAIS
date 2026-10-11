@@ -1,12 +1,12 @@
 import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
-import { isCardPayment } from '../lib/card.js';
+import { isCardPayment, normalizeAssistantCard } from '../lib/card.js';
 import { destinationFromDescription } from '../src/travel.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
-const cardFromDescription = (description,date,source) => { const p=/parcela\s+(\d+)\/(\d+)/i.exec(String(description||'')), t=/compra total R\$\s*([\d.]+,\d{2})/i.exec(String(description||'')); if(!p||!t||+p[1]<1||+p[1]>+p[2]) return null; return {purchase_id:`assistant:${source}`,installment:+p[1],count:+p[2],total:Number(t[1].replaceAll('.','').replace(',','.')),purchase_date:date,card:''}; };
+const cardFromDescription = (description,date,source) => { const p=/parcela\s+(\d+)\/(\d+)/i.exec(String(description||'')), t=/compra total R\$\s*([\d.]+,\d{2})/i.exec(String(description||'')); if(!p||!t||+p[1]<1||+p[1]>+p[2]) return null; return normalizeAssistantCard({purchase_id:`assistant:${source}`,installment:+p[1],count:+p[2],total:Number(t[1].replaceAll('.','').replace(',','.')),purchase_date:date,card:''},date); };
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   const action=req.query.action;
