@@ -67,3 +67,21 @@ test('alimentação com travessão curto grava destino limpo e mantém categoria
  const result=await call('record',{type:'expense',category:'Alimentação',description:'Alimentação – viagem Carolina/MA (cartão de crédito)',amount:260.70,date:'2026-10-09',request_id:'alimentacao_carolina_test'},'D'.repeat(43));
  assert.equal(result.statusCode,201);assert.equal(result.data.saved,true);
 });
+
+test('assistant persists a shared purchase ID and original month for every parcel',async()=>{
+ const cards=[];
+ globalThis.assistantSql=async(strings,...v)=>{
+  if(strings.join('').startsWith('SELECT id FROM assistant'))return {rows:[{id:1}]};
+  if(strings.join('').startsWith('INSERT')){
+   cards.push(JSON.parse(v[5].split('\n').find(x=>x.startsWith('@finance-card:')).slice(14)));
+   return {rows:[{id:10,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4]}]};
+  }
+  return {rows:[]};
+ };
+ for(let i=1;i<=3;i++){
+  const result=await call('record',{type:'expense',category:'Viagem',description:`Tour — parcela ${i}/3 — compra total R$ 100,00`,amount:i===3?33.34:33.33,date:`2026-${9+i}-10`,request_id:`tour-example-p${i}`},'D'.repeat(43));
+  assert.equal(result.data.saved,true);
+ }
+ assert.equal(new Set(cards.map(c=>c.purchase_id)).size,1);
+ assert.deepEqual(cards.map(c=>c.purchase_date),Array(3).fill('2026-10-10'));
+});

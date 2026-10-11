@@ -69,3 +69,18 @@ test('conflito ou dois vínculos à mesma parcela desfazem todo o lote',async()=
     assert.deepEqual(pool.state(),[target]);assert.ok(pool.calls.includes('ROLLBACK'));assert.equal(pool.calls.at(-1),'release');
   }
 });
+
+test('assistant parcel IDs share one purchase, including already saved metadata', () => {
+  const entries = [1,2,3].map((installment) => ({
+    type:'expense', amount: installment === 3 ? 33.34 : 33.33,
+    date:`2026-${9 + installment}-10`, description:`Tour — parcela ${installment}/3`,
+    notes:'@finance-card:' + JSON.stringify({purchase_id:`assistant:1:tour-example-p${installment}`,installment,count:3,total:100,purchase_date:`2026-${9 + installment}-10`,card:''})
+  }));
+  const costs = purchaseCosts([...entries].reverse());
+  assert.equal(costs.length,1);
+  assert.equal(costs[0].amount,100);
+  assert.equal(costs[0].date,'2026-10-10');
+  assert.deepEqual(dashboardEntries(entries,'installments').map(e=>e.amount),[33.33,33.33,33.34]);
+  const other = {...entries[0],notes:entries[0].notes.replace('tour-example','other-tour')};
+  assert.equal(purchaseCosts([...entries,other]).length,2);
+});
