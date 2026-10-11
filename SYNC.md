@@ -24,3 +24,13 @@ A senha autentica uma única conta pessoal compartilhada entre seus aparelhos. S
 
 `npm install`, `npm run build` e `node --test tests/*.test.js`. Verifique após publicar: login em dois aparelhos, gravação de um lançamento de teste e atualização no outro; reimportação sem duplicar; erro de rede sem mensagem falsa de sucesso. Esses testes de produção dependem do acesso à Vercel e ao banco e não foram executados nesta alteração.
 
+
+## Registro conferido pelo assistente
+
+`POST /api/assistant?action=purchase` recebe uma compra completa: `type=expense`, `amount` total, `description`, `category`, `destination` quando viagem, `purchase_date`, `date` da primeira parcela, `installment_count` (1–60), `request_id` estável e `payment_account` opcional. O servidor gera as parcelas em centavos; o restante de centavos fica nas primeiras parcelas. `record` atende receitas e despesas simples; tentativas de enviar parcelas isoladas são recusadas.
+
+Ambas as operações usam transação e bloqueio curto da tabela contra escritas concorrentes. Antes do COMMIT, releem os registros, conferem valor, quantidade, vínculo e metadados e comparam os deltas mensais (compras e parcelas), por categoria e por viagem com a solicitação. Qualquer divergência provoca ROLLBACK. O resultado só retorna `saved=true, verified=true` após COMMIT; `verification` contém antes/depois/delta em BRL. Esses campos comprovam a consistência no instante da gravação, não o pagamento ou a conciliação bancária. Perda de resposta deve ser tratada repetindo exatamente o mesmo request_id: o servidor confere o registro existente e devolve delta zero. Alterar os dados de um pedido repetido causa conflito.
+
+`POST ...?action=audit` permite conferir registros existentes sem escrever: `entry_ids`, `expected_amount` total e `destination` opcional. `summary` mantém a resposta mensal por parcelas para compatibilidade e expõe `views.installments` e `views.purchases`, com identificação explícita do modo.
+
+O conector privado expõe `registrar_compra_parcelada` e `conferir_compra`, além de `registrar_lancamento`; não aceita confirmação de nova gravação sem `verified=true`. Os testes usam dados fictícios e simulação de falhas de banco; não criam registros de teste na conta de produção.
