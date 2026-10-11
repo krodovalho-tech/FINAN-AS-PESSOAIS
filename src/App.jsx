@@ -1,7 +1,7 @@
 import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
-import { travelDetails, dashboardCategory, travelCategory } from "./travel.js";
+import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
@@ -232,7 +232,7 @@ function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
     (group.categories[category] ||= []).push(entry);
   });
   const destinations=[...new Set([...trips.map(t=>t.destination),...Object.keys(grouped)])].filter(Boolean);
-  const preferred=["Hospedagem","Combustível","Alimentação e lanches","Presentes e mimos","Passeios","Outros / a classificar"];
+  const preferred=["Hospedagem","Combustível",TRAVEL_FOOD_CATEGORY,"Presentes e mimos","Passeios","Outros / a classificar"];
   return <Modal show={show} onClose={onClose}>
     <h2 style={{color:"#75b8ff",fontSize:"1rem",marginBottom:12}}>Viagens e destinos</h2>
     <p style={{color:"#aab9cb",marginBottom:16}}>Dashboard por destino e natureza da despesa. Toque na categoria para consultar os lançamentos.</p>
@@ -262,7 +262,7 @@ function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
             const categoryOpen=selectedCategory===category;
             return <div key={category}>
               <button type="button" onClick={()=>setSelectedCategory(categoryOpen?"":category)} style={{...S.btn(false),width:"100%",textAlign:"left",display:"grid",gap:7}}>
-                <span style={{display:"flex",justifyContent:"space-between",gap:10}}><strong>{category}</strong><strong>{fmt(amount)}</strong></span>
+                <span style={{display:"flex",justifyContent:"space-between",gap:10}}><strong style={{minWidth:0}}>{category}</strong><strong style={{whiteSpace:"nowrap",flexShrink:0}}>{fmt(amount)}</strong></span>
                 <span style={{height:7,borderRadius:9,background:"#263548",overflow:"hidden",display:"block"}}><span style={{display:"block",height:"100%",width:`${group.total>0?Math.max(0,Math.min(100,amount/group.total*100)):0}%`,background:"#75b8ff",borderRadius:9}}/></span>
               </button>
               {categoryOpen && <div style={{margin:"6px 4px 10px 12px",borderLeft:"2px solid #35465c",paddingLeft:10}}>

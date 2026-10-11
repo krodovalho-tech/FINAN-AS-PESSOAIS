@@ -42,13 +42,17 @@ export function dashboardCategory(entry) {
   return entry.category;
 }
 
+export const TRAVEL_FOOD_CATEGORY = "Alimentação — Bares, restaurantes e lanches";
+
 export function travelCategory(entry) {
   const category = String(entry.category || "").trim();
+  const normalized = category.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (['alimentacao', 'alimentacao e lanches', 'alimentacao bares, restaurantes e lanches', 'bares, restaurantes e lanches'].includes(normalized)) return TRAVEL_FOOD_CATEGORY;
   if (category && !/^viagem$/i.test(category)) return category;
   const description = String(entry.description || "").toLowerCase();
   if (/hospedagem|hotel|pousada|diária/.test(description)) return "Hospedagem";
   if (/combustível|abastecimento|gasolina|etanol|diesel/.test(description)) return "Combustível";
-  if (/alimentação|almoço|jantar|lanche|restaurante|churros|café da manhã/.test(description)) return "Alimentação e lanches";
+  if (/alimentação|almoço|jantar|lanche|restaurante|churros|café da manhã/.test(description)) return TRAVEL_FOOD_CATEGORY;
   if (/presente|brinde|mimo|lembrancinha/.test(description)) return "Presentes e mimos";
   if (/entrada|ingresso|passeio|complexo novo banho|parque/.test(description)) return "Passeios";
   return "Outros / a classificar";
