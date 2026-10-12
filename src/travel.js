@@ -1,7 +1,20 @@
 const PREFIX = '@finance-travel:';
 
 export function normalizeDestination(value) {
-  return String(value || '').trim().replace(/\s*(?:,|\/|\s)\s*([A-Za-z]{2})\s*$/, ' / $1').replace(/\s+/g, ' ');
+  return String(value || '').trim().replace(/\s*(?:,|\/|[-–—]|\s)\s*([A-Za-z]{2})\s*$/, (_, uf) => ' / ' + uf.toUpperCase()).replace(/\s+/g, ' ');
+}
+
+// Normalize existing registrations as well as entries; keep their stable IDs.
+export function normalizeTrips(rows) {
+  const trips = new Map();
+  for (const row of rows) {
+    const destination = normalizeDestination(row.destination);
+    if (!destination) continue;
+    const previous = trips.get(destination);
+    if (!previous) trips.set(destination, { ...row, destination });
+    else if (!previous.start_date && row.start_date) previous.start_date = row.start_date;
+  }
+  return [...trips.values()];
 }
 
 // Descriptions sent by voice/chat may use any dash or put payment in parentheses.

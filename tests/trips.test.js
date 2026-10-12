@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const source=(await readFile(new URL('../api/trips.js',import.meta.url),'utf8'))
+ .replace("'../src/travel.js'",JSON.stringify(new URL('../src/travel.js',import.meta.url).href))
  .replace("import { sql } from '@vercel/postgres';",'const sql=(...args)=>globalThis.tripsSql(...args);')
  .replace("import { requireAuth } from '../lib/auth.js';",'const requireAuth=()=>globalThis.tripsAuthorized;');
 const {default:handler}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);

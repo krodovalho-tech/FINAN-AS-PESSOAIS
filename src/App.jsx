@@ -1,7 +1,7 @@
 import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
-import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY } from "./travel.js";
+import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
 import { normalizeEntryForm } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
@@ -539,7 +539,7 @@ function Finance() {
     } catch (err) { setSyncError(err.message); }
   }, []);
 
-  const loadTrips=useCallback(async()=>{try{setTrips(await api.getTrips());}catch(err){setSyncError(err.message);}},[]);
+  const loadTrips=useCallback(async()=>{try{setTrips(normalizeTrips(await api.getTrips()));}catch(err){setSyncError(err.message);}},[]);
   const knownTrips=useMemo(()=>[...new Set([...trips.map(t=>t.destination),...allEntries.map(e=>travelDetails(e).destination).filter(Boolean)])].map(destination=>({destination})),[trips,allEntries]);
   useEffect(()=>{loadTrips();},[loadTrips]);
   useEffect(() => { loadMonth(); }, [loadMonth]);

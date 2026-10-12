@@ -1,5 +1,6 @@
 import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
+import { normalizeDestination, normalizeTrips } from '../src/travel.js';
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -8,7 +9,7 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const deleteId = Number(req.query?.id);
   if (req.method === 'DELETE' && (!Number.isSafeInteger(deleteId) || deleteId <= 0)) return res.status(400).json({error:'Identificador inválido.'});
-  const destination = typeof body.destination === 'string' ? body.destination.trim() : '';
+  const destination = typeof body.destination === 'string' ? normalizeDestination(body.destination) : '';
   const date = body.start_date || null;
   if (req.method === 'POST' && (!destination || destination.length > 160 || (date && (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T12:00:00Z')) || new Date(date + 'T12:00:00Z').toISOString().slice(0,10) !== date)))) {
     return res.status(400).json({ error: 'Informe um destino e uma data de partida válida.' });
@@ -24,7 +25,8 @@ export default async function handler(req, res) {
       ? await sql`SELECT id, destination, start_date FROM trips ORDER BY destination`
       : await sql`INSERT INTO trips (destination, start_date) VALUES (${destination}, ${date}) ON CONFLICT (destination) DO UPDATE SET start_date=COALESCE(EXCLUDED.start_date, trips.start_date) RETURNING id, destination, start_date`;
     const normalized = rows.map(row => ({ ...row, start_date: row.start_date ? (row.start_date instanceof Date ? row.start_date.toISOString() : String(row.start_date)).slice(0,10) : null }));
-    return res.status(req.method === 'GET' ? 200 : 201).json(req.method === 'GET' ? normalized : normalized[0]);
+    const canonical = normalizeTrips(normalized);
+    return res.status(req.method === 'GET' ? 200 : 201).json(req.method === 'GET' ? canonical : canonical[0]);
   } catch {
     return res.status(500).json({ error: 'Não foi possível salvar ou consultar os destinos.' });
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { travelDetails, travelPayload, normalizeDestination, dashboardCategory } from '../src/travel.js';
+import { travelDetails, travelPayload, normalizeDestination, normalizeTrips, dashboardCategory } from '../src/travel.js';
 import { normalizeEntryForm } from '../src/entry-form.js';
 import { normalizeImport } from '../src/import.js';
 import { recurringPayload, travelGuard } from '../lib/entry-validation.js';
@@ -28,7 +28,7 @@ test('observações antigas e metadados inválidos continuam intactos',()=>{
 });
 
 test('normaliza variações do mesmo destino para um único agrupador',()=>{
-  for(const value of ['Carolina, MA','Carolina/MA','Carolina / MA',' Carolina  /  MA ']) assert.equal(normalizeDestination(value),'Carolina / MA');
+  for(const value of ['Carolina-MA','Carolina–ma','Carolina — MA','Carolina, MA','Carolina/MA','Carolina / MA',' Carolina  /  MA ']) assert.equal(normalizeDestination(value),'Carolina / MA');
   for(const description of ['Hospedagem — viagem Carolina, MA — cartão','Balsa — viagem a Carolina/MA','Abastecimento — viagem a Carolina / MA']) assert.equal(travelDetails({category:'Viagem',description}).destination,'Carolina / MA');
   assert.equal(travelDetails({category:'Alimentação',description:'Alimentação — viagem a Carolina, MA — bares e restaurantes'}).destination,'Carolina / MA');
 });
@@ -63,4 +63,13 @@ test('backend bloqueia viagem sem destino estruturado',()=>{
   assert.equal(travelGuard(travelPayload({type:'expense',category:'Combustível',description:'Combustível — viagem Carolina/MA',destination:'Carolina/MA'})),true);
   assert.equal(travelGuard({type:'expense',category:'Viagem',description:'Hospedagem'}),false);
   assert.equal(travelGuard({type:'expense',category:'Combustível',description:'Abastecimento comum'}),true);
+});
+
+test('cadastros e gastos antigos com hífen aparecem na mesma viagem sem duplicar valores',()=>{
+  const trips=normalizeTrips([{id:1,destination:'Carolina / MA',start_date:'2026-10-08'},{id:2,destination:'Carolina-MA',start_date:null}]);
+  assert.deepEqual(trips,[{id:1,destination:'Carolina / MA',start_date:'2026-10-08'}]);
+  const entries=[travelPayload({id:1,amount:5643.33,destination:'Carolina / MA'}),{id:2,amount:214,notes:'@finance-travel:{"destination":"Carolina-MA"}\n'}];
+  assert.equal(new Set(entries.map(e=>travelDetails(e).destination)).size,1);
+  assert.equal(entries.reduce((sum,e)=>sum+Math.round(e.amount*100),0),585733);
+  assert.equal(entries[1].id,2);
 });
