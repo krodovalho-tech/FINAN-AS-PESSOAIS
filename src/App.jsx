@@ -484,6 +484,9 @@ function Finance() {
   const [showTrips,setShowTrips]=useState(false);
   const [filterDestination,setFilterDestination]=useState("");
   const [budgets, setBudgets]       = useState({});
+  const [bankBalances,setBankBalances]=useState([]);
+  const [balanceForm,setBalanceForm]=useState({bank:"Caixa",balance:"",as_of:"2026-10-13T16:19"});
+  const [balanceBusy,setBalanceBusy]=useState(false);
   const [syncError, setSyncError] = useState("");
   const [lastSync, setLastSync] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -540,19 +543,25 @@ function Finance() {
     } catch (err) { setSyncError(err.message); }
   }, []);
 
+  const loadBankBalances=useCallback(async()=>{try{const data=await api.getBankBalances();setBankBalances(data.balances||[]);}catch(err){setSyncError(err.message);}},[]);
+  const saveBalance=async()=>{
+    setBalanceBusy(true);
+    try {await api.saveBankBalance(balanceForm.bank,Number(balanceForm.balance.replace(',','.')),new Date(balanceForm.as_of).toISOString());await loadBankBalances();showToast('Saldo do extrato registrado sem criar receitas ou despesas.');}
+    catch(err){setSyncError(err.message);}finally{setBalanceBusy(false);}
+  };
   const loadTrips=useCallback(async()=>{try{setTrips(normalizeTrips(await api.getTrips()));}catch(err){setSyncError(err.message);}},[]);
   const knownTrips=useMemo(()=>[...new Set([...trips.map(t=>t.destination),...allEntries.map(e=>travelDetails(e).destination).filter(Boolean)])].map(destination=>({destination})),[trips,allEntries]);
-  useEffect(()=>{loadTrips();},[loadTrips]);
+  useEffect(()=>{loadTrips();loadBankBalances();},[loadTrips,loadBankBalances]);
   useEffect(() => { loadMonth(); }, [loadMonth]);
   useEffect(() => { loadAll(); loadBudgets(); }, [loadAll, loadBudgets]);
 
   useEffect(() => {
-    const refresh = () => { if (!document.hidden && !savingRef.current) { loadMonth(); loadAll(); loadBudgets(); loadTrips(); } };
+    const refresh = () => { if (!document.hidden && !savingRef.current) { loadMonth(); loadAll(); loadBudgets(); loadTrips(); loadBankBalances(); } };
     const timer = setInterval(refresh, 30000);
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
-  }, [loadMonth, loadAll, loadBudgets, loadTrips]);
+  }, [loadMonth, loadAll, loadBudgets, loadTrips,loadBankBalances]);
 
   // ── Toast helper ──
   const showToast = (msg, undo=null) => {
@@ -839,7 +848,20 @@ function Finance() {
           <button style={S.btn(dashboardMode==='purchases')} aria-pressed={dashboardMode==='purchases'} onClick={()=>setDashboardMode('purchases')}>Compras do mês · valor total</button>
           <button style={S.btn(dashboardMode==='installments')} aria-pressed={dashboardMode==='installments'} onClick={()=>setDashboardMode('installments')}>Parcelas do mês</button>
         </div>
-        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Despesas, saldo e categorias consideram o valor completo das compras realizadas no mês. Parcelas futuras não são somadas novamente.' : 'Despesas, saldo e categorias consideram somente as parcelas previstas para o mês.'} O saldo exibido não é o saldo bancário.</p>
+        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Despesas, saldo e categorias consideram o valor completo das compras realizadas no mês. Parcelas futuras não são somadas novamente.' : 'Despesas, saldo e categorias consideram somente as parcelas previstas para o mês.'} O resultado mensal não é o saldo bancário.</p>
+        {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
+          <h2 style={{fontSize:'1rem',marginBottom:8}}>Saldos bancários por extrato</h2>
+          <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Último saldo documentado por conta. Não inclui cheque especial e não representa atualização em tempo real.</p>
+          {bankBalances.map(b=><div key={b.bank} style={{display:'flex',justifyContent:'space-between',gap:10,marginBottom:8}}><span>{b.bank} · {new Date(b.as_of).toLocaleString('pt-BR')}</span><strong>{fmt(b.balance)}</strong></div>)}
+          <div style={{borderTop:'1px solid #35465c',paddingTop:10,marginTop:8,display:'flex',justifyContent:'space-between',gap:8}}><strong>Saldo consolidado documentado</strong><strong>{bankBalances.length?fmt(bankBalances.reduce((a,b)=>a+Number(b.balance),0)):'Aguardando registro'}</strong></div>
+          <p style={{fontSize:12,color:'#aab9cb',margin:'12px 0'}}>Registrar saldo de extrato, sem criar lançamento:</p>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+            <select style={{...S.input,flex:'1 1 100px'}} aria-label="Banco" value={balanceForm.bank} onChange={e=>setBalanceForm(x=>({...x,bank:e.target.value}))}><option>Caixa</option><option>Unicred</option></select>
+            <input style={{...S.input,flex:'1 1 100px'}} aria-label="Saldo bancário" placeholder="Saldo R$" value={balanceForm.balance} onChange={e=>setBalanceForm(x=>({...x,balance:e.target.value}))}/>
+            <input style={{...S.input,flex:'1 1 180px'}} aria-label="Data e hora do extrato" type="datetime-local" value={balanceForm.as_of} onChange={e=>setBalanceForm(x=>({...x,as_of:e.target.value}))}/>
+            <button style={S.btn(true)} disabled={balanceBusy||!balanceForm.balance.trim()} onClick={saveBalance}>{balanceBusy?'Salvando…':'Registrar saldo'}</button>
+          </div>
+        </section>}
         {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>
           <p style={S.label}>Custo total das viagens · todos os meses</p>
           {knownTrips.map(t=><p key={t.destination} style={{marginTop:10}}>{t.destination}: <strong style={{color:'#75b8ff'}}>{fmt(purchaseCosts(allEntries).filter(e=>travelDetails(e).destination===t.destination).reduce((sum,e)=>sum+Number(e.amount),0))}</strong></p>)}
@@ -851,7 +873,7 @@ function Finance() {
           {[
             { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
             { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
-            { label:"Saldo",          value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
+            { label:"Resultado do mês", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
             { label:"Taxa de Poupança", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
           ].map((k,i)=>(
             <div key={i} style={S.card}>
