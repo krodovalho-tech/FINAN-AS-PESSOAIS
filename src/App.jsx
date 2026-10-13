@@ -1,3 +1,4 @@
+import { normalizeFoodCategory } from './food-categories.js';
 import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
@@ -18,7 +19,7 @@ import {
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = [
-  "Moradia","Alimentação","Alimentação — supermercado","Alimentação — bares, restaurantes e lanches","Rancho — ração de animais","Empréstimos concedidos","Locações — manutenção","Doações","Água, energia e gás","Telefone e internet","Transporte","Saúde","Educação",
+  "Moradia","Alimentação — supermercado","Alimentação — bares, restaurantes e lanches","Rancho — ração de animais","Empréstimos concedidos","Locações — manutenção","Doações","Água, energia e gás","Telefone e internet","Transporte","Saúde","Educação",
   "Lazer","Viagem","Vestuário","Investimentos","Impostos","Cartão de Crédito","Outros"
 ];
 const INCOME_CATEGORIES = [
@@ -36,7 +37,7 @@ const today = new Date().toISOString().split("T")[0];
 
 // ─── AUTO-CATEGORIZAÇÃO ─────────────────────────────────────────────────────
 const CAT_RULES = [
-  { keys:["supermercado","mercado","padaria","açougue","hortifruti","feira","carrefour","extra","assai","pão de açucar","atacadão"], cat:"Alimentação" },
+  { keys:["supermercado","mercado","padaria","açougue","hortifruti","feira","carrefour","extra","assai","pão de açucar","atacadão"], cat:"Alimentação — supermercado" },
   { keys:["farmácia","drogaria","hospital","clínica","laboratorio","droga","saude","plano de saude","dental"], cat:"Saúde" },
   { keys:["uber","99pop","ifood","rappi","taxi","gasolina","combustivel","posto","shell","ipiranga","estacionamento","pedágio","onibus","metro"], cat:"Transporte" },
   { keys:["escola","faculdade","mensalidade","curso","educação","universidade","colegio","livro","inglês","idioma"], cat:"Educação" },
@@ -69,7 +70,7 @@ function parseOFX(content) {
     const date = dtRaw.length>=8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : today;
     const amount = parseFloat(get(b,"TRNAMT")||"0");
     const desc = (get(b,"MEMO")||get(b,"NAME")||get(b,"FITID")||"Sem descrição").replace(/&amp;/g,"&");
-    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:autoCategory(desc), recurring:false, source_id:get(b,"FITID"), bank:`${get(content,"ORG") || get(content,"BANKID") || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
+    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:normalizeFoodCategory(autoCategory(desc),desc), recurring:false, source_id:get(b,"FITID"), bank:`${get(content,"ORG") || get(content,"BANKID") || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
   }
   return results;
 }
@@ -368,7 +369,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
 
 // ─── BUDGET MODAL ─────────────────────────────────────────────────────────
 function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
-  const [form, setForm] = useState({ category:"Alimentação", amount:"" });
+  const [form, setForm] = useState({ category:"Alimentação — supermercado", amount:"" });
   return (
     <Modal show={show} onClose={onClose} maxWidth={520}>
       <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>Orçamento por Categoria</h2>
