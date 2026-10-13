@@ -1,3 +1,4 @@
+import { normalizeFoodCategory } from '../src/food-categories.js';
 import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
 import { validEntry } from '../lib/entry-validation.js';
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
       }
       const { rows } = await sql`
         INSERT INTO entries (type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation)
-        VALUES (${type}, ${category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${notes||null}, ${source_id||null}, ${bank||null}, ${confirmed===true}, ${reconciliation ? JSON.stringify(reconciliation) : null}::jsonb)
+        VALUES (${type}, ${type === 'expense' ? normalizeFoodCategory(category,description) : category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${notes||null}, ${source_id||null}, ${bank||null}, ${confirmed===true}, ${reconciliation ? JSON.stringify(reconciliation) : null}::jsonb)
         RETURNING *
       `;
       return res.status(201).json(normalizeRows(rows)[0]);
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
           SELECT id, recurring, bank FROM entries WHERE id=${parseInt(id, 10)} FOR UPDATE
         ), updated AS (
         UPDATE entries
-        SET type=${type}, category=${category}, description=${description},
+        SET type=${type}, category=${type === 'expense' ? normalizeFoodCategory(category,description) : category}, description=${description},
             amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}, notes=${notes||null}
         FROM previous
         WHERE entries.id=previous.id
@@ -117,7 +118,7 @@ export default async function handler(req, res) {
       if (bulk.some(e => e.import_action && !['new','skip','match','card_payment'].includes(e.import_action))) return res.status(400).json({ error: 'Ação de importação inválida.' });
       if (bulk.some(e => e.import_action === 'match' && !e.match_id || e.import_action === 'card_payment' && e.type !== 'expense')) return res.status(400).json({ error: 'Confira o vínculo ou a quitação do cartão.' });
       try {
-        const result = await importBatch(bulk);
+        const result = await importBatch(bulk.map(e => e.import_action === 'match' ? e : {...e,category:e.type === 'expense' ? normalizeFoodCategory(e.category,e.description) : e.category}));
         return res.status(201).json({ ...result, entries: normalizeRows(result.entries) });
       } catch (err) {
         if (/parcela|fatura|vinculad|prévia|duplicidade/.test(err.message)) return res.status(409).json({ error: err.message });
