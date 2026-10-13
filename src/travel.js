@@ -1,3 +1,4 @@
+import { normalizeFoodCategory } from './food-categories.js';
 const PREFIX = '@finance-travel:';
 
 export function normalizeDestination(value) {
@@ -52,13 +53,13 @@ export function dashboardCategory(entry) {
   // Viagem é uma dimensão transversal: o dashboard mensal preserva a natureza
   // financeira (Combustível, Alimentação, Hospedagem etc.). O custo integral
   // por destino é calculado separadamente por travelDetails + purchaseCosts.
-  return entry.category;
+  return entry.type === 'expense' ? normalizeFoodCategory(entry.category,entry.description) : entry.category;
 }
 
 export const TRAVEL_FOOD_CATEGORY = "Alimentação — Bares, restaurantes e lanches";
 
 export function travelCategory(entry) {
-  const category = String(entry.category || "").trim();
+  const category = String(normalizeFoodCategory(entry.category,entry.description) || "").trim();
   const normalized = category.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (['alimentacao', 'alimentacao e lanches', 'alimentacao bares, restaurantes e lanches', 'bares, restaurantes e lanches'].includes(normalized)) return TRAVEL_FOOD_CATEGORY;
   if (category && !/^viagem$/i.test(category)) return category;
