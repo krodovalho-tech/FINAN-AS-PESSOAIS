@@ -1,3 +1,4 @@
+import { normalizeFoodCategory } from '../src/food-categories.js';
 import { sql } from '@vercel/postgres';
 import { requireAuth } from '../lib/auth.js';
 import { recurringPayload, validEntry } from '../lib/entry-validation.js';
@@ -12,7 +13,7 @@ export default async function handler(req,res) {
   try {
    const prefix=`${Number(id)}:%`,day=Number(e.date.slice(8,10));
    const result=await sql`WITH original AS (
-    UPDATE entries SET type=${e.type},category=${e.category},description=${e.description},amount=${Number(e.amount)},date=${e.date},notes=${e.notes || null}
+    UPDATE entries SET type=${e.type},category=${e.type === 'expense' ? normalizeFoodCategory(e.category,e.description) : e.category},description=${e.description},amount=${Number(e.amount)},date=${e.date},notes=${e.notes || null}
     WHERE id=${Number(id)} AND recurring=TRUE AND bank IS DISTINCT FROM 'Recorrência' RETURNING id
    ), forecasts AS (
     UPDATE entries SET type=${e.type},category=${e.category},description=${e.description},amount=${Number(e.amount)},notes=${e.notes || null},
@@ -47,7 +48,7 @@ export default async function handler(req,res) {
  const roots=await sql`SELECT * FROM entries WHERE recurring=TRUE AND bank IS DISTINCT FROM 'Recorrência'`;
  const payload=recurringPayload(roots.rows,year,month);
  if(!payload.length)return res.status(200).json({inserted:0,skipped:0});
- const json=JSON.stringify(payload);
+ const json=JSON.stringify(payload.map(e=>({...e,category:e.type === 'expense' ? normalizeFoodCategory(e.category,e.description) : e.category})));
  const result=await sql`WITH candidates AS (
  SELECT x.* FROM jsonb_to_recordset(${json}::jsonb) AS x(type text,category text,description text,amount numeric,date date,notes text,source_id text,bank text,recurring boolean,confirmed boolean)
  JOIN entries root ON root.id=split_part(x.source_id,':',1)::integer
