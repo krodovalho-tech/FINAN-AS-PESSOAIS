@@ -15,6 +15,8 @@ export const api = {
   deleteEntry:id=>request(`entries?id=${id}`,{method:'DELETE'}),
   bulkInsert:entries=>send('entries','PATCH',{entries:entries.map(travelPayload)}),
   editRecurring:(id,entry)=>send('recurring','POST',{action:'edit',id,entry:travelPayload(entry)}),
+  getBankBalances:()=>request('bank-balances'),
+  saveBankBalance:(bank,balance,as_of)=>send('bank-balances','POST',{bank,balance,as_of}),
   getTrips:()=>request('trips'),
   addTrip:trip=>send('trips','POST',trip),
   deleteTrip:id=>request(`trips?id=${encodeURIComponent(id)}`,{method:'DELETE'}),
