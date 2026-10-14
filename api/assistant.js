@@ -2,6 +2,7 @@ import { sql } from '@vercel/postgres';
 import { randomBytes, createHash } from 'node:crypto';
 import { requireAuth } from '../lib/auth.js';
 import { cardDetails } from '../lib/card.js';
+import { normalizeFoodCategory } from '../src/food-categories.js';
 import { recordVerified, RecordError, auditPurchase, monthlySummary } from '../lib/verified-record.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
@@ -81,6 +82,7 @@ export default async function handler(req,res) {
       const next={...expected,...changes};
       if(!valid(next)) return res.status(400).json({error:'Confira valor positivo, categoria, descrição e data válida.'});
       next.amount=Math.round(Number(next.amount)*100)/100;
+      if (next.type === 'expense') next.category=normalizeFoodCategory(next.category,next.description);
       const {rows}=await sql`UPDATE entries SET type=${next.type},category=${next.category},description=${next.description},amount=${next.amount},date=${next.date} WHERE id=${id} AND type=${expected.type} AND category=${expected.category} AND description=${expected.description} AND amount=${Number(expected.amount)} AND date=${expected.date} RETURNING id,type,category,description,amount,date`;
       if(rows.length) return res.status(200).json({saved:true,entry:rows[0]});
       const {rows:existing}=await sql`SELECT id,type,category,description,amount,date FROM entries WHERE id=${id}`;
