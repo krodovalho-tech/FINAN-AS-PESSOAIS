@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diário Nutricional</title><style>
+:root{font-family:system-ui,-apple-system,sans-serif;color-scheme:dark;background:#10161a;color:#edf4f4}
+*{box-sizing:border-box}body{margin:0 auto;max-width:850px;padding:22px 16px 60px}h1{margin:8px 0}
+a{color:#9ddcce}p,.muted{color:#aabfbd}.card{background:#1d292e;border:1px solid #34484b;border-radius:14px;padding:18px;margin:16px 0}
+label{display:block;font-weight:600;font-size:.88rem;margin:12px 0 5px}input,select,textarea,button{font:inherit;border-radius:9px;padding:11px;max-width:100%}
+input,select,textarea{background:#101c21;border:1px solid #587176;color:white;width:100%}textarea{min-height:65px}
+button{background:#9ddcce;color:#11252a;border:0;font-weight:700;cursor:pointer;margin-top:12px}
+button.secondary{background:#344a50;color:white;margin-right:6px}button.danger{background:#6e3639;color:white}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:#243439;padding:13px;border-radius:10px}.stat b{display:block;font-size:1.4rem;margin-top:6px}
+.entry{padding:12px 0;border-bottom:1px solid #34484b}.entry:last-child{border:0}.entry h3{margin:0 0 6px}
+small{color:#b2c5c3}#notice{min-height:1.5em}nav{display:flex;justify-content:space-between;align-items:center;gap:12px}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,1fr)}}
+</style></head><body>
+<nav><a href="/">← Financeiro</a><span>Diário alimentar</span></nav>
+<h1>Acompanhamento nutricional</h1><p>Registre refeições e consulte os totais por dia. Quantidades estimadas devem ser conferidas.</p>
+<section id="login" class="card" hidden><h2>Acesso</h2><form id="loginForm"><label>Senha do aplicativo</label><input id="password" type="password" required autocomplete="current-password"><button>Entrar</button></form></section>
+<div id="app" hidden>
+<section class="card"><label for="day">Data</label><input id="day" type="date"><div class="stats" id="stats"></div></section>
+<section class="card"><h2 id="formTitle">Nova refeição</h2><form id="mealForm">
+<label for="meal">Refeição</label><select id="meal"><option>Café da manhã</option><option>Almoço</option><option>Lanche</option><option>Jantar</option><option>Ceia</option></select>
+<label for="description">Descrição e porções</label><textarea id="description" required maxlength="2000" placeholder="Ex.: 2 ovos fritos na margarina e 1 pão francês"></textarea>
+<div class="grid"><div><label for="calories">Calorias (kcal)</label><input id="calories" type="number" min="0" max="10000" step=".01" required></div>
+<div><label for="protein">Proteínas (g)</label><input id="protein" type="number" min="0" max="10000" step=".01" required></div>
+<div><label for="carbs">Carboidratos (g)</label><input id="carbs" type="number" min="0" max="10000" step=".01" required></div>
+<div><label for="fat">Gorduras (g)</label><input id="fat" type="number" min="0" max="10000" step=".01" required></div></div>
+<button id="save">Salvar refeição</button> <button id="cancel" type="button" class="secondary" hidden>Cancelar edição</button>
+</form></section><section class="card"><h2>Refeições registradas</h2><div id="entries"></div></section></div>
+<p id="notice" role="status"></p>
+<script>
+const $=id=>document.getElementById(id);let entries=[],editId=null;
+function localDate(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+$('day').value=localDate();
+async function request(path,options={}){const res=await fetch(path,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...options});
+ const data=await res.json().catch(()=>({}));if(res.status===401){$('login').hidden=false;$('app').hidden=true;throw Error('Entre com sua senha.')}
+ if(!res.ok)throw Error(data.error||'Falha de comunicação');return data}
+function fmt(n){return Number(n||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}
+function show(msg){$('notice').textContent=msg}
+async function load(){try{entries=await request('/api/nutrition?date='+encodeURIComponent($('day').value));$('login').hidden=true;$('app').hidden=false;render();show('')}catch(e){show(e.message)}}
+function render(){const totals=['calories','protein','carbs','fat'].map(k=>entries.reduce((s,e)=>s+Number(e[k]||0),0));
+$('stats').replaceChildren();['Calorias (kcal)','Proteínas (g)','Carboidratos (g)','Gorduras (g)'].forEach((label,i)=>{const d=document.createElement('div');d.className='stat';const s=document.createElement('small');s.textContent=label;const b=document.createElement('b');b.textContent=fmt(totals[i]);d.append(s,b);$('stats').append(d)});
+$('entries').replaceChildren();if(!entries.length){const p=document.createElement('p');p.textContent='Nenhuma refeição registrada nesta data.';$('entries').append(p)}
+entries.forEach(e=>{const wrap=document.createElement('div');wrap.className='entry';const h=document.createElement('h3');h.textContent=e.meal;const p=document.createElement('p');p.textContent=e.description;const s=document.createElement('small');s.textContent=fmt(e.calories)+' kcal · P '+fmt(e.protein)+' g · C '+fmt(e.carbs)+' g · G '+fmt(e.fat)+' g';const edit=document.createElement('button');edit.className='secondary';edit.textContent='Editar';edit.onclick=()=>{editId=e.id;$('formTitle').textContent='Editar refeição';$('cancel').hidden=false;['meal','description','calories','protein','carbs','fat'].forEach(k=>$(k).value=e[k]);window.scrollTo({top:200,behavior:'smooth'})};const del=document.createElement('button');del.className='danger';del.textContent='Excluir';del.onclick=async()=>{if(!confirm('Excluir esta refeição?'))return;try{await request('/api/nutrition?id='+e.id,{method:'DELETE'});await load()}catch(err){show(err.message)}};wrap.append(h,p,s,document.createElement('br'),edit,del);$('entries').append(wrap)})}
+function reset(){$('mealForm').reset();editId=null;$('formTitle').textContent='Nova refeição';$('cancel').hidden=true}
+$('cancel').onclick=reset;$('day').onchange=()=>{reset();load()};
+$('mealForm').onsubmit=async ev=>{ev.preventDefault();const v={date:$('day').value};['meal','description','calories','protein','carbs','fat'].forEach(k=>v[k]=$(k).value);try{await request('/api/nutrition'+(editId?'?id='+editId:''),{method:editId?'PUT':'POST',body:JSON.stringify(v)});reset();await load();show('Refeição salva no banco.')}catch(e){show(e.message)}};
+$('loginForm').onsubmit=async ev=>{ev.preventDefault();try{await request('/api/session',{method:'POST',body:JSON.stringify({password:$('password').value})});$('password').value='';await load()}catch(e){show(e.message)}};
+load();
+</script></body></html>
