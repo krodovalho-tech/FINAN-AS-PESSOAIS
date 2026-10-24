@@ -1,3 +1,4 @@
+import { paymentPayload } from './monthly-views.js';
 import { travelPayload } from './travel.js';
 export async function request(path, options = {}) {
   const response = await fetch(`/api/${path}`, { credentials:'same-origin', ...options, headers:{ 'Content-Type':'application/json', ...options.headers } });
@@ -10,10 +11,10 @@ const send = (path, method, body) => request(path, { method, body:JSON.stringify
 export const api = {
   getEntries:(month,year)=>request(`entries?month=${month}&year=${year}`),
   getAllEntries:()=>request('entries?all=true'),
-  addEntry:e=>send('entries','POST',travelPayload(e)),
-  updateEntry:(id,e)=>send(`entries?id=${id}`,'PUT',travelPayload(e)),
+  addEntry:e=>send('entries','POST',paymentPayload(travelPayload(e))),
+  updateEntry:(id,e)=>send(`entries?id=${id}`,'PUT',paymentPayload(travelPayload(e))),
   deleteEntry:id=>request(`entries?id=${id}`,{method:'DELETE'}),
-  bulkInsert:entries=>send('entries','PATCH',{entries:entries.map(travelPayload)}),
+  bulkInsert:entries=>send('entries','PATCH',{entries:entries.map(e=>paymentPayload(travelPayload(e)))}),
   editRecurring:(id,entry)=>send('recurring','POST',{action:'edit',id,entry:travelPayload(entry)}),
   getBankBalances:()=>request('bank-balances'),
   saveBankBalance:(bank,balance,as_of)=>send('bank-balances','POST',{bank,balance,as_of}),
@@ -21,9 +22,11 @@ export const api = {
   addTrip:trip=>send('trips','POST',trip),
   deleteTrip:id=>request(`trips?id=${encodeURIComponent(id)}`,{method:'DELETE'}),
   stopRecurring:id=>send('recurring','POST',{action:'stop',id}),
+  getRecurringExclusions:()=>request('recurring'),
   applyRecurring:(month,year)=>send('recurring','POST',{month,year}),
   getBudgets:()=>request('budgets'),
   setBudget:(category,monthly_limit)=>send('budgets','POST',{category,monthly_limit}),
   deleteBudget:category=>request(`budgets?category=${encodeURIComponent(category)}`,{method:'DELETE'}),
 };
+
 

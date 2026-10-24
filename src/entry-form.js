@@ -1,8 +1,9 @@
+import { paymentMethod } from './monthly-views.js';
 import { normalizeFoodCategory } from './food-categories.js';
 import { travelDetails } from './travel.js';
 export function normalizeEntryForm(initial, today) {
   const travel = travelDetails(initial);
-  return initial ? {...initial,category:normalizeFoodCategory(initial.category,initial.description),...(travel.destination ? travel : {}),date:String(initial.date || '').slice(0,10),amount:String(initial.amount ?? ''),recurring:!!initial.recurring,...(initial.recurrence_end_date ? {recurrence_end_date:String(initial.recurrence_end_date).slice(0,10)} : {})} : {type:'expense',category:'Alimentação — supermercado',description:'',amount:'',date:today,recurring:false};
+  return initial ? {...initial,payment_method:paymentMethod(initial),category:normalizeFoodCategory(initial.category,initial.description),...(travel.destination ? travel : {}),date:String(initial.date || '').slice(0,10),amount:String(initial.amount ?? ''),recurring:!!initial.recurring,...(initial.recurrence_end_date ? {recurrence_end_date:String(initial.recurrence_end_date).slice(0,10)} : {})} : {type:'expense',category:'Alimentação — supermercado',description:'',amount:'',date:today,recurring:false,payment_method:'unknown'};
 }
 
 

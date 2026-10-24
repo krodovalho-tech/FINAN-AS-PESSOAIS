@@ -5,6 +5,12 @@ import { recurringPayload, validEntry } from '../lib/entry-validation.js';
 export default async function handler(req,res) {
  if(!requireAuth(req,res))return;
  res.setHeader('Cache-Control','no-store');
+ if(req.method==='GET'){
+  try{const exists=await sql`SELECT to_regclass('public.recurrence_occurrences') AS name`;
+   const rows=exists.rows[0]?.name?(await sql`SELECT source_id FROM recurrence_occurrences`).rows:[];
+   return res.status(200).json({excluded:rows.map(e=>e.source_id)});
+  }catch{return res.status(500).json({error:'Não foi possível carregar exceções das recorrências.'});}
+ }
  if(req.method!=='POST')return res.status(405).json({error:'Operação não permitida.'});
  const {year,month,action,id}=req.body || {};
  if(action==='edit') {

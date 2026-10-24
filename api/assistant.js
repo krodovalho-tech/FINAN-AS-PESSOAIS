@@ -48,9 +48,13 @@ export default async function handler(req,res) {
       const year=Number(req.query.year),month=Number(req.query.month);
       if (!Number.isInteger(year)||year<2000||year>2200||!Number.isInteger(month)||month<1||month>12) return res.status(400).json({error:'Informe mês e ano válidos.'});
       const {rows}=await sql`SELECT * FROM entries ORDER BY id`;
+      const exists=await sql`SELECT to_regclass('public.recurrence_occurrences') AS name`;
+      const excluded=exists.rows[0]?.name?(await sql`SELECT source_id FROM recurrence_occurrences`).rows.map(e=>e.source_id):[];
       const installments=monthlySummary(rows,year,month,'installments');
-      const purchases=monthlySummary(rows,year,month,'purchases');
-      return res.status(200).json({...installments,views:{installments,purchases}});
+      const purchases=monthlySummary(rows,year,month,'purchases',excluded);
+      const cash=monthlySummary(rows,year,month,'cash',excluded);
+      const commitments=monthlySummary(rows,year,month,'commitments',excluded);
+      return res.status(200).json({...installments,views:{installments,purchases,cash,commitments}});
     }
 
     if (action==='entries' && req.method==='GET') {

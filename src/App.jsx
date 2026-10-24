@@ -3,6 +3,7 @@ import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
 import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
+import { monthlyViews, monthlyTotals } from "./monthly-views.js";
 import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
@@ -344,6 +345,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
           </select>
         </div>
         <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
+        {!card && !form.cardPurchase && <label style={S.label}>Forma de pagamento<select aria-label="Forma de pagamento" value={form.payment_method || 'unknown'} onChange={e=>set('payment_method',e.target.value)} style={S.input}>{[['unknown','Não informado'],['credit','Crédito'],['debit','Débito'],['pix','Pix'],['cash','Dinheiro'],['ticket','Ticket / benefício'],['bank','Conta bancária / boleto']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
         <div>
           <label style={S.label}>Descrição</label>
           <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Ex: Fatura Nubank março" style={S.input} onKeyDown={e=>e.key==="Enter"&&valid&&onSave(form)}/>
@@ -494,6 +496,7 @@ function Finance() {
   const [year, setYear]             = useState(now.getFullYear());
   const [entries, setEntries]       = useState([]);
   const [allEntries, setAllEntries] = useState([]);
+  const [recurrenceExclusions,setRecurrenceExclusions]=useState([]);
   const [trips,setTrips]=useState([]);
   const [showTrips,setShowTrips]=useState(false);
   const [filterDestination,setFilterDestination]=useState("");
@@ -529,12 +532,7 @@ function Finance() {
     const sequence = ++monthRequest.current;
     setLoading(true);
     try {
-      const generated = await api.applyRecurring(month,year);
       const data = await api.getEntries(month, year);
-      if (generated.inserted>0) {
-        const all = await api.getAllEntries();
-        if (sequence === monthRequest.current) setAllEntries(all);
-      }
       if (sequence !== monthRequest.current) return;
       setEntries(data); setSyncError(""); setLastSync(new Date());
     } catch (err) { if (sequence === monthRequest.current) setSyncError(err.message); }
@@ -543,8 +541,9 @@ function Finance() {
 
   const loadAll = useCallback(async () => {
     try {
-      const data = await api.getAllEntries();
+      const [data,exceptions] = await Promise.all([api.getAllEntries(),api.getRecurringExclusions()]);
       setAllEntries(Array.isArray(data) ? data : []);
+      setRecurrenceExclusions(exceptions.excluded || []);
     } catch (err) { setSyncError(err.message); }
   }, []);
 
@@ -586,7 +585,14 @@ function Finance() {
   };
 
   // ── Computed values ──
-  const dashboardAll = useMemo(()=>dashboardEntries(allEntries,dashboardMode),[allEntries,dashboardMode]);
+  const monthViews=useMemo(()=>monthlyViews(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
+  const viewTotals=useMemo(()=>monthlyTotals(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
+  const futureCommitments=useMemo(()=>Array.from({length:12},(_,i)=>{const d=new Date(year,month+i+1,1);return {year:d.getFullYear(),month:d.getMonth(),...monthlyTotals(allEntries,d.getFullYear(),d.getMonth()+1,recurrenceExclusions)};}),[allEntries,year,month,recurrenceExclusions]);
+  const dashboardAll = useMemo(()=>{
+    const rows=[];
+    for(let i=-6;i<=0;i++){const d=new Date(year,month+i,1);rows.push(...monthlyViews(allEntries,d.getFullYear(),d.getMonth()+1,recurrenceExclusions)[dashboardMode]);}
+    return rows;
+  },[allEntries,dashboardMode,year,month,recurrenceExclusions]);
   const dashboardMonth = useMemo(()=>dashboardAll.filter(e=>Number(String(e.date).slice(0,4))===year && Number(String(e.date).slice(5,7))===month+1),[dashboardAll,month,year]);
   const totalIncome  = useMemo(() => dashboardMonth.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
   const totalExpense = useMemo(() => dashboardMonth.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
@@ -859,10 +865,21 @@ function Finance() {
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
         <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
-          <button style={S.btn(dashboardMode==='purchases')} aria-pressed={dashboardMode==='purchases'} onClick={()=>setDashboardMode('purchases')}>Compras do mês · valor total</button>
-          <button style={S.btn(dashboardMode==='installments')} aria-pressed={dashboardMode==='installments'} onClick={()=>setDashboardMode('installments')}>Parcelas do mês</button>
+          {[["purchases","Compras no mês"],["cash","Gastos no mês"],["commitments","Parcelados e recorrentes no mês"]].map(([mode,label])=><button key={mode} style={S.btn(dashboardMode===mode)} aria-pressed={dashboardMode===mode} onClick={()=>setDashboardMode(mode)}>{label} · {fmt(viewTotals[mode])}</button>)}
         </div>
-        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Despesas, saldo e categorias consideram o valor completo das compras realizadas no mês. Parcelas futuras não são somadas novamente.' : 'Despesas, saldo e categorias consideram somente as parcelas previstas para o mês.'} O resultado mensal não é o saldo bancário.</p>
+        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Valor integral das compras do mês, no crédito e fora dele. Uma compra parcelada entra uma única vez, pela data da compra.' : dashboardMode==='cash' ? 'Despesas fora do crédito: débito, Pix, dinheiro, ticket e conta bancária. Lançamentos sem forma de pagamento identificada ficam pendentes de revisão.' : 'Parcelas do crédito com vencimento no mês e despesas recorrentes, incluindo previsões até a data final. Uma despesa que pertence aos dois grupos entra uma única vez.'} As visões se sobrepõem e não devem ser somadas. O resultado mensal não é o saldo bancário.</p>
+        {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
+          <h2 style={{fontSize:'1rem',marginBottom:8}}>Compromissos nos próximos 12 meses</h2>
+          <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Parcelas e contas recorrentes já cadastradas. Toque no mês para consultar. As previsões não alteram o saldo bancário.</p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:8}}>
+           {futureCommitments.map(m=><button key={`${m.year}-${m.month}`} style={{...S.btn(false),textAlign:'left',padding:12}} onClick={()=>{setYear(m.year);setMonth(m.month);setDashboardMode('commitments');setView('dashboard');}}><span style={{display:'block',marginBottom:6}}>{MONTHS[m.month]} / {m.year}</span><strong>{fmt(m.commitments)}</strong></button>)}
+          </div>
+        </section>}
+        {view==='dashboard' && monthViews.unknown.length>0 && <section style={{...S.card,marginBottom:16,borderColor:'#c8c87e'}}>
+          <strong>Revisar forma de pagamento: {monthViews.unknown.length} lançamento(s) · {fmt(viewTotals.unknown)}</strong>
+          <p style={{color:'#aab9cb',fontSize:13,marginTop:8}}>Sem identificação suficiente para separar crédito de débito. Esses valores permanecem no histórico e nas compras; não entram em “Gastos no mês” até a revisão.</p>
+          <div style={{maxHeight:200,overflowY:'auto',marginTop:8}}>{monthViews.unknown.map(e=><div key={e.id || e.source_id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 0'}}><span>{e.description} · {fmt(e.amount)}</span><button style={S.btn(false)} onClick={()=>setEditEntry(e.projection?allEntries.find(r=>r.id===e.root_id):e)}>Revisar</button></div>)}</div>
+        </section>}
         {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
           <h2 style={{fontSize:'1rem',marginBottom:8}}>Saldos bancários por extrato</h2>
           <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Último saldo documentado por conta. Não inclui cheque especial e não representa atualização em tempo real.</p>
@@ -886,9 +903,9 @@ function Finance() {
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
           {[
             { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
-            { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
-            { label:"Resultado do mês", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
-            { label:"Taxa de Poupança", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
+            { label:dashboardMode==="commitments"?"Comprometido no mês":dashboardMode==="cash"?"Gastos fora do crédito":"Compras no mês", value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
+            { label:dashboardMode==="commitments"?"Receitas menos compromissos":"Resultado da visão", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
+            { label:"Resultado / receitas", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
           ].map((k,i)=>(
             <div key={i} style={S.card}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.5rem" }}>
@@ -1109,12 +1126,12 @@ function Finance() {
         <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
         <div style={{maxHeight:"55vh",overflowY:"auto"}}>
           {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
-          {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
+          {detailEntries.map(e=><article key={e.id || e.source_id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#ff929b":"#53d6a0"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
             <p style={{color:"#b6c4d6",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
             <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
             {e.card && <p style={{color:'#aab9cb'}}>Valor completo da compra · a edição abaixo abre a parcela cadastrada.</p>}
-            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===e.id) || e);}}>Editar lançamento / observações</button>
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?"Editar recorrência original":"Editar lançamento / observações"}</button>
           </article>)}
         </div>
         <button style={{...S.btn(false),marginTop:16}} onClick={()=>setDetailCategory(null)}>Fechar</button>

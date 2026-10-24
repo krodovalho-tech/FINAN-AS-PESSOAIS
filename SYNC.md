@@ -51,3 +51,13 @@ Validação específica: `node --test tests/recurrence-end.test.js` executa regr
 `entries` devolve `recurring` e `recurrence_end_date` tanto na busca quanto por ID. `edit` aceita esses campos em `changes`; ao alterá-los, exige ambos no snapshot `expected`. Usa transação e releitura, preserva notas, banco, identificadores, confirmação e conciliação; responde saved e verified somente após conferir e confirmar a transação. Reduzir prazo ou desativar remove apenas previsões não confirmadas da série. A migração de recurrence_end_date é idempotente e ocorre na primeira escrita autenticada do assistente, sem necessidade de expor senha ou credenciais.
 
 O serviço Sites que fornece as ferramentas também precisa ser atualizado para anunciar os campos, validá-los e repassá-los. Publicar apenas o painel não atualiza as ferramentas disponíveis no ChatGPT. Testes específicos: `node --test tests/assistant-recurrence.test.js tests/recurrence-end.test.js tests/verified-record.test.js`.
+
+## Três visões mensais e projeção
+
+- **Compras no mês:** despesas pelo valor integral e data da compra, incluindo crédito e demais meios; compras parceladas são agrupadas uma vez por purchase_id. Previsões recorrentes ainda não confirmadas não são novas compras.
+- **Gastos no mês:** despesas fora do crédito (débito, Pix, dinheiro, ticket e conta bancária). Forma desconhecida exige revisão, não é presumida como débito.
+- **Parcelados e recorrentes no mês:** parcelas de crédito registradas para o mês e despesas recorrentes, atuais e projetadas, respeitando data final inclusiva. Um item nos dois grupos entra uma vez. As três visões se sobrepõem e não devem ser somadas.
+
+O dashboard mostra os próximos 12 meses clicáveis. Navegar não grava previsões: as projeções são calculadas a partir dos originais ativos, e respeitam exclusões mensais explícitas. “Aplicar” no painel Recorrentes continua sendo uma ação explícita para materializar previsões. O detalhamento de uma previsão permite editar seu original sem criar um gasto novo.
+
+O campo Forma de pagamento permite revisar legados. A classificação explícita fica em notes (@finance-payment), preservando viagem e demais metadados. Compras com metadados de cartão sempre são crédito; “COMPRA CARTAO VISA” num extrato bancário não é evidência de crédito. O assistente aceita payment_method opcional nos novos registros. `summary` mantém o formato legado e expõe `views.purchases`, `views.cash` e `views.commitments`, com as mesmas regras do dashboard. Saldo bancário continua documentado separadamente.
