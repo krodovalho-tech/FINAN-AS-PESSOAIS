@@ -670,7 +670,7 @@ function Finance() {
 
   // ── Filtered + sorted transactions ──
   const filtered = useMemo(() => {
-    let list = [...entries];
+    let list = [...monthViews[dashboardMode]];
     if (filterDestination) list=list.filter(e=>travelDetails(e).destination===filterDestination);
     if (filterType!=="all") list = list.filter(e=>e.type===filterType);
     if (search) {
@@ -684,7 +684,7 @@ function Finance() {
       return 0;
     });
     return list;
-  }, [entries, filterType, search, sortBy, filterDestination]);
+  }, [monthViews, dashboardMode, filterType, search, sortBy, filterDestination]);
 
   // ── CRUD handlers ──
   const handleSave = async (form) => {
@@ -1084,6 +1084,7 @@ function Finance() {
         {/* ─────────────────── LANÇAMENTOS ─────────────────── */}
         {!loading && view==="lancamentos" && (
           <div>
+            <p style={{color:'#75b8ff',marginBottom:12,fontWeight:600}}>Lançamentos · {dashboardMode==='commitments'?'Parcelados e recorrentes no mês':dashboardMode==='cash'?'Gastos no mês':'Compras no mês'}</p>
             {/* Filter bar */}
             <div style={{ display:"flex",gap:"0.5rem",marginBottom:"0.8rem",flexWrap:"wrap",alignItems:"center" }}>
               <input placeholder="Buscar por descrição, categoria ou destino…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...S.input, marginTop:0, flex:1, minWidth:"200px" }}/>
@@ -1104,11 +1105,11 @@ function Finance() {
             <div style={{ background:"#19222e",border:"1px solid #35465c",borderRadius:"10px",overflow:"hidden" }}>
               {filtered.length===0 ? (
                 <div style={{ textAlign:"center",color:"#aab9cb",padding:"3rem" }}>
-                  {entries.length===0?"Sem lançamentos neste período.":"Nenhum resultado."}
+                  {monthViews[dashboardMode].length===0?"Sem lançamentos nesta visão e período.":"Nenhum resultado para os filtros."}
                 </div>
               ) : (
                 filtered.map(e=>(
-                  <div key={e.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.8rem 1rem",borderBottom:"1px solid #253244",gap:"0.5rem" }}>
+                  <div key={e.id || e.source_id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.8rem 1rem",borderBottom:"1px solid #253244",gap:"0.5rem" }}>
                     <div style={{ display:"flex",alignItems:"center",gap:"0.8rem",flex:1,minWidth:0 }}>
                       <div style={{ width:8,height:8,borderRadius:"50%",background:e.type==="income"?"#53d6a0":"#ff929b",flexShrink:0 }}/>
                       <div style={{ minWidth:0 }}>
@@ -1127,18 +1128,18 @@ function Finance() {
                       <span style={{ color:e.type==="income"?"#53d6a0":"#ff929b",fontWeight:"600",fontSize:"0.9rem" }}>
                         {e.type==="income"?"+":"-"}{fmt(e.amount)}
                       </span>
-                      <button onClick={()=>setEditEntry(e)} title="Editar" aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#75b8ff",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
+                      <button onClick={()=>setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e)} title={e.projection?'Editar recorrência original':'Editar'} aria-label={`Editar ${e.description}`} style={{ background:"none",border:"none",color:"#75b8ff",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Pencil size={13}/>
                       </button>
-                      <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#aab9cb",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
+                      {!e.projection && !e.card && <button onClick={()=>setDelConfirm(e)} title="Excluir" style={{ background:"none",border:"none",color:"#aab9cb",cursor:"pointer",padding:"10px",minWidth:40,minHeight:40 }}>
                         <Trash2 size={13}/>
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 ))
               )}
             </div>
-            {entries.length>0 && (
+            {monthViews[dashboardMode].length>0 && (
               <p style={{ fontSize:"0.72rem",color:"#8fa2bb",textAlign:"right",marginTop:"0.5rem" }}>
                 {filtered.length} lançamento(s) · Despesas: {fmt(filtered.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((t,e)=>t+Number(e.amount),0))} · Receitas: {fmt(filtered.filter(e=>e.type==="income").reduce((t,e)=>t+Number(e.amount),0))}
               </p>

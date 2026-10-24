@@ -39,3 +39,17 @@ test('legados usam evidência explícita; cartão Visa de extrato não é automa
  const payment={...e,reconciliation:{kind:'card_payment'}};
  assert.equal(monthlyTotals([payment],2026,10).purchases,0);assert.equal(monthlyTotals([payment],2026,10).commitments,0);
 });
+
+test('conferência: Pix/débito avulsos ficam fora; lote recorrente integra compromissos',()=>{
+ const rows=[expense(1,16.98,'2026-10-24','Supermercado — Débito'),expense(2,15,'2026-10-23','Refeição — Pix'),{...expense(3,524.09,'2026-10-01','Lote QD de teste','bank'),recurring:true},expense(4,20,'2026-10-23','Compra — crédito')];
+ const views=monthlyViews(rows,2026,10);
+ assert.deepEqual(views.commitments.filter(e=>e.type==='expense').map(e=>e.id),[3,4]);
+ assert.deepEqual(views.cash.filter(e=>e.type==='expense').map(e=>e.id),[1,2,3]);
+ assert.equal(monthlyTotals(rows,2026,10).commitments,544.09);
+});
+
+test('compra integral usa a primeira parcela como origem de edição, mesmo com dados em ordem invertida',()=>{
+ const schedule=installmentSchedule({...expense(1,300,'2026-10-24','Compra'),purchase_date:'2026-10-20'},3,'Teste','purchase-order-test').map((e,i)=>({...e,id:i+10}));
+ const purchase=monthlyViews(schedule.reverse(),2026,10).purchases[0];
+ assert.equal(purchase.id,10);assert.equal(purchase.amount,300);
+});

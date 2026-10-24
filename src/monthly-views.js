@@ -43,7 +43,8 @@ export function monthlyViews(entries,year,month,excluded=[]){
   return {...e,projection:true,root_id:root.id,payment_method:paymentMethod(root),notes:paymentPayload({...e,payment_method:paymentMethod(root)}).notes};
  });
  const scheduled=[...all,...forecasts].filter(inMonth);
- const purchases=purchaseCosts(all.filter(e=>e.bank!=='Recorrência'||e.confirmed===true)).filter(inMonth);
+ const purchased=all.filter(e=>e.bank!=='Recorrência'||e.confirmed===true).slice().sort((a,b)=>(cardDetails(a)?.installment || 0)-(cardDetails(b)?.installment || 0));
+ const purchases=purchaseCosts(purchased).filter(inMonth);
  const cash=scheduled.filter(e=>e.type==='expense'&& !['credit','unknown'].includes(paymentMethod(e)));
  const commitments=scheduled.filter(e=>e.type==='expense'&&(paymentMethod(e)==='credit'||e.recurring||e.bank==='Recorrência'));
  const unknown=scheduled.filter(e=>e.type==='expense'&&paymentMethod(e)==='unknown');
