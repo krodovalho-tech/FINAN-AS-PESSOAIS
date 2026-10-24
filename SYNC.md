@@ -34,3 +34,12 @@ Ambas as operações usam transação e bloqueio curto da tabela contra escritas
 `POST ...?action=audit` permite conferir registros existentes sem escrever: `entry_ids`, `expected_amount` total e `destination` opcional. `summary` mantém a resposta mensal por parcelas para compatibilidade e expõe `views.installments` e `views.purchases`, com identificação explícita do modo.
 
 O conector privado expõe `registrar_compra_parcelada` e `conferir_compra`, além de `registrar_lancamento`; não aceita confirmação de nova gravação sem `verified=true`. Os testes usam dados fictícios e simulação de falhas de banco; não criam registros de teste na conta de produção.
+
+
+## Recorrência com data final
+
+Após publicar esta mudança, execute **Preparar banco** para adicionar a coluna opcional `recurrence_end_date` (migração idempotente). Na edição de um lançamento original, marque **Recorrente** e preencha **Recorre até (opcional)**. O mesmo campo está em **Recorrentes → Editar informações**. Vazio mantém a repetição mensal sem prazo. A tela informa o número total de pagamentos, incluindo o original; a última ocorrência deve vencer até a data informada, inclusive. Para vencimentos no dia 31, fevereiro usa seu último dia.
+
+O prazo é salvo no banco, devolvido pela API e preservado na exportação/importação JSON. A geração mensal respeita o limite. Encurtar o prazo remove apenas as previsões da série após a data final que ainda não foram confirmadas, preservando o lançamento original e pagamentos confirmados; prorrogar permite gerar novamente os meses removidos pelo limite, sem duplicar os já existentes. Nenhum contrato real recebe uma data final presumida.
+
+Validação específica: `node --test tests/recurrence-end.test.js` executa regras de calendário e os endpoints contra Postgres em memória (PGlite), incluindo migração, edição, limite inclusivo, reimportação dos metadados, proteção de confirmados, prorrogação e idempotência.

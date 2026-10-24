@@ -3,7 +3,7 @@ import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
 import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
-import { normalizeEntryForm } from "./entry-form.js";
+import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -282,13 +282,25 @@ function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
   </Modal>;
 }
 
+function RecurrenceEndField({form,set,saving}) {
+ const end=form.recurrence_end_date || '';
+ return <div style={{display:'grid',gap:8}}>
+  <label style={S.label}>Recorre até (opcional)
+   <input aria-label="Recorre até" type="date" min={form.date} style={S.input} value={end} disabled={saving} onChange={e=>set('recurrence_end_date',e.target.value)}/>
+  </label>
+  <small style={{color:end && end<form.date ? '#ff929b' : '#aab9cb'}}>
+   {end && end<form.date ? 'A data final deve ser igual ou posterior à data original.' : end ? `${recurrenceCount(form.date,end)} pagamentos mensais, incluindo este lançamento. Não gera previsões após a data final.` : 'Sem data final: repete mensalmente por prazo indeterminado.'}
+  </small>
+ </div>;
+}
+
 function RecurringItem({entry,saving,onSave,onStop,trips}) {
   const [editing,setEditing]=useState(false),[confirm,setConfirm]=useState(false);
   const [form,setForm]=useState(()=>normalizeEntryForm(entry,today));
   const set=(key,value)=>setForm(f=>({...f,[key]:value}));
-  const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date;
+  const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date && (!form.recurrence_end_date || form.recurrence_end_date>=form.date);
   return <div style={{padding:"16px 0",borderBottom:"1px solid #35465c"}}>
-    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#75b8ff"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#aab9cb"}}>{entry.category}</small></div>
+    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#75b8ff"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#aab9cb"}}>{entry.category}{entry.recurrence_end_date ? ` · até ${String(entry.recurrence_end_date).slice(0,10).split("-").reverse().join("/")} · ${recurrenceCount(String(entry.date).slice(0,10),String(entry.recurrence_end_date).slice(0,10))} pagamentos no total` : " · sem data final"}</small></div>
     {!editing && <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}><button disabled={saving} style={S.btn(false)} onClick={()=>{setForm(normalizeEntryForm(entry,today));setEditing(true);setConfirm(false);}}>Editar informações</button><button disabled={saving} style={{...S.btn(false),color:"#ff929b"}} onClick={()=>setConfirm(true)}>Cancelar recorrência</button></div>}
     {editing && <div style={{display:"grid",gap:12,marginTop:16}}>
       <label style={S.label}>Descrição<input style={S.input} value={form.description} onChange={e=>set("description",e.target.value)}/></label>
@@ -297,6 +309,7 @@ function RecurringItem({entry,saving,onSave,onStop,trips}) {
       <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
       <label style={S.label}>Valor (R$)<input style={S.input} type="number" min="0.01" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)}/></label>
       <label style={S.label}>Data original / dia do vencimento<input style={S.input} type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></label>
+      <RecurrenceEndField form={form} set={set} saving={saving}/>
       <label style={S.label}>Observações<textarea style={S.input} value={form.notes || ""} onChange={e=>set("notes",e.target.value)}/></label>
       <p style={{fontSize:13,color:"#aab9cb"}}>Altera o lançamento original e suas previsões ainda não confirmadas. O dia do vencimento é aplicado nos meses seguintes.</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving || !valid} onClick={async()=>{if(await onSave(form))setEditing(false);}}>{saving?"Salvando…":"Salvar alterações"}</button><button style={S.btn(false)} disabled={saving} onClick={()=>setEditing(false)}>Descartar alterações</button></div>
@@ -312,7 +325,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
   useEffect(() => { setForm(normalizeEntryForm(initial,today)); },[initial,show]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const card = cardDetails(initial);
-  const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && !saving;
+  const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && (!form.recurring || !form.recurrence_end_date || form.recurrence_end_date>=form.date) && !saving;
   return (
     <Modal show={show} onClose={onClose}>
       <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
@@ -359,6 +372,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
           <input type="checkbox" disabled={form.bank==="Recorrência" || saving || form.cardPurchase || !!card} checked={form.recurring && !form.cardPurchase && !card} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#75b8ff" }}/>
           {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (aparece automaticamente nos meses seguintes)"}
         </label>
+        {form.recurring && form.bank!=="Recorrência" && !form.cardPurchase && !card && <RecurrenceEndField form={form} set={set} saving={saving}/>}
         <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#75b8ff":"#253244",color:valid?"#10151d":"#8fa2bb",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
           {saving?"Salvando…":isEdit?"Salvar Alterações":"Confirmar Lançamento"}
         </button>
@@ -1046,7 +1060,7 @@ function Finance() {
                           {cardDetails(e) && <span>Parcela {cardDetails(e).installment}/{cardDetails(e).count} · compra {fmt(cardDetails(e).total)}</span>}
                           {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
-                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
+                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : e.recurrence_end_date ? `↻ até ${String(e.recurrence_end_date).slice(0,10).split("-").reverse().join("/")}` : "↻ recorrente"}</span>}
                         </div>
                       </div>
                     </div>
@@ -1148,5 +1162,6 @@ export default function App() {
     </form>
   </main>;
 }
+
 
 
