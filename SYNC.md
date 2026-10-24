@@ -43,3 +43,11 @@ Após publicar esta mudança, execute **Preparar banco** para adicionar a coluna
 O prazo é salvo no banco, devolvido pela API e preservado na exportação/importação JSON. A geração mensal respeita o limite. Encurtar o prazo remove apenas as previsões da série após a data final que ainda não foram confirmadas, preservando o lançamento original e pagamentos confirmados; prorrogar permite gerar novamente os meses removidos pelo limite, sem duplicar os já existentes. Nenhum contrato real recebe uma data final presumida.
 
 Validação específica: `node --test tests/recurrence-end.test.js` executa regras de calendário e os endpoints contra Postgres em memória (PGlite), incluindo migração, edição, limite inclusivo, reimportação dos metadados, proteção de confirmados, prorrogação e idempotência.
+
+### Recorrência pela conexão do ChatGPT
+
+`record` aceita `recurring` booleano opcional e `recurrence_end_date` opcional (YYYY-MM-DD inclusivo ou null). Omitir mantém a gravação simples. `purchase` continua proibindo recorrência para não repetir compras parceladas. A conferência de gravação inclui os campos de recorrência e rejeita reenvio de um request_id com prazo diferente.
+
+`entries` devolve `recurring` e `recurrence_end_date` tanto na busca quanto por ID. `edit` aceita esses campos em `changes`; ao alterá-los, exige ambos no snapshot `expected`. Usa transação e releitura, preserva notas, banco, identificadores, confirmação e conciliação; responde saved e verified somente após conferir e confirmar a transação. Reduzir prazo ou desativar remove apenas previsões não confirmadas da série. A migração de recurrence_end_date é idempotente e ocorre na primeira escrita autenticada do assistente, sem necessidade de expor senha ou credenciais.
+
+O serviço Sites que fornece as ferramentas também precisa ser atualizado para anunciar os campos, validá-los e repassá-los. Publicar apenas o painel não atualiza as ferramentas disponíveis no ChatGPT. Testes específicos: `node --test tests/assistant-recurrence.test.js tests/recurrence-end.test.js tests/verified-record.test.js`.
