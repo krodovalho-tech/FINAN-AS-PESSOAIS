@@ -22,7 +22,7 @@ import {
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = [
   "Moradia","Alimentação — supermercado","Alimentação — bares, restaurantes e lanches","Rancho — ração de animais","Empréstimos concedidos","Locações — manutenção","Doações","Água, energia e gás","Telefone e internet","Transporte","Saúde","Educação",
-  "Lazer","Viagem","Vestuário","Investimentos","Impostos","Cartão de Crédito","Outros"
+  "Lazer","Viagem","Vestuário","Investimento","Impostos","Cartão de Crédito","Outros"
 ];
 const INCOME_CATEGORIES = [
   "Salário","Pró-labore","Dividendos","Aluguel","Freelance","Outros"
@@ -47,7 +47,7 @@ const CAT_RULES = [
   { keys:["roupa","sapato","shopping","zara","renner","riachuelo","c&a","hering","moda","vestuário"], cat:"Vestuário" },
   { keys:["aluguel","condomínio","iptu","luz","água","energia","internet","telefone","celular","tim","claro","vivo","oi"], cat:"Moradia" },
   { keys:["imposto","irpf","darf","receita federal","simples nacional"], cat:"Impostos" },
-  { keys:["investimento","cdb","tesouro","ação","fundo","poupança","aplicação","renda fixa","bolsa"], cat:"Investimentos" },
+  { keys:["investimento","cdb","tesouro","ação","fundo","poupança","aplicação","renda fixa","bolsa"], cat:"Investimento" },
   { keys:["fatura","cartão","nubank","itau","bradesco","santander","banco inter","c6","xp"], cat:"Cartão de Crédito" },
 ];
 
@@ -1115,7 +1115,7 @@ function Finance() {
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:"0.85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{e.description}</div>
                         <div style={{ fontSize:"0.7rem",color:"#aab9cb",display:"flex",flexWrap:"wrap",gap:"0.4rem",alignItems:"center" }}>
-                          <span>{e.category}</span><span>·</span><span>{e.reconciliation?.status==='conciliado'?'✓ Conciliado':e.bank==='Assistente'?'Aguardando extrato':''}</span>
+                          <span>{dashboardCategory(e)}</span><span>·</span><span>{e.reconciliation?.status==='conciliado'?'✓ Conciliado':e.bank==='Assistente'?'Aguardando extrato':''}</span>
                           {isCardPayment(e) && <span>Quitação do cartão · fora das despesas</span>}
                           {cardDetails(e) && <span>Parcela {cardDetails(e).installment}/{cardDetails(e).count} · compra {fmt(cardDetails(e).total)}</span>}
                           {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
@@ -1158,7 +1158,7 @@ function Finance() {
           {commitmentEntries.length===0 && <p style={{padding:'20px 0',color:'#aab9cb'}}>Nenhum compromisso cadastrado para este mês.</p>}
           {commitmentEntries.map(e=>{const card=cardDetails(e);return <article key={e.id || e.source_id} style={{padding:'14px 0',borderBottom:'1px solid #35465c',overflowWrap:'anywhere'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><strong>{e.description}</strong><strong style={{color:'#ff929b',whiteSpace:'nowrap'}}>{fmt(e.amount)}</strong></div>
-            <p style={{color:'#aab9cb',fontSize:13,marginTop:6}}>{String(e.date).slice(0,10).split('-').reverse().join('/')} · {e.category}</p>
+            <p style={{color:'#aab9cb',fontSize:13,marginTop:6}}>{String(e.date).slice(0,10).split('-').reverse().join('/')} · {dashboardCategory(e)}</p>
             <p style={{color:'#75b8ff',fontSize:13,marginTop:6}}>{card?`Crédito · parcela ${card.installment}/${card.count}`:e.projection?'Recorrente · previsão calculada':e.bank==='Recorrência'?'Recorrente · previsão cadastrada':'Conta recorrente'}{e.confirmed===true?' · registro confirmado':''}</p>
             <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setShowCommitments(false);setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?'Conferir / editar recorrência original':'Conferir / editar lançamento'}</button>
           </article>;})}

@@ -5,6 +5,7 @@ const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
 export const PAYMENT_METHODS=['unknown','credit','debit','pix','cash','ticket','bank'];
 export function paymentMethod(e){
  if(cardDetails(e))return 'credit';
+ if(PAYMENT_METHODS.includes(e?.payment_method))return e.payment_method;
  const lines=String(e?.notes||'').split('\n');
  const tagged=lines.find(l=>l.startsWith(PAYMENT_PREFIX));
  if(tagged){try{const method=JSON.parse(tagged.slice(PAYMENT_PREFIX.length)).payment_method;if(PAYMENT_METHODS.includes(method))return method;}catch{}}
@@ -34,7 +35,14 @@ export function paymentPayload(entry){
 const monthKey=(year,month)=>`${year}-${String(month).padStart(2,'0')}`;
 export function monthlyViews(entries,year,month,excluded=[]){
  const key=monthKey(year,month),inMonth=e=>String(e.date).slice(0,7)===key;
- const all=entries.filter(e=>!isCardPayment(e));
+ const raw=entries.filter(e=>!isCardPayment(e));
+ const originals=new Map(raw.filter(e=>e.bank!=='Recorrência').map(e=>[String(e.id),e]));
+ const all=raw.map(e=>{
+  if(e.bank!=='Recorrência'||paymentMethod(e)!=='unknown'||/@finance-payment:|\"payment_method\"\s*:/.test(String(e.notes||'')))return e;
+  const root=originals.get(String(e.source_id||'').split(':')[0]);
+  const method=root?paymentMethod(root):'unknown';
+  return method==='unknown'?e:{...e,payment_method:method};
+ });
  const roots=all.filter(e=>e.recurring&&e.bank!=='Recorrência');
  const suppressed=new Set(excluded);
  const existing=new Set(all.filter(e=>e.bank==='Recorrência').map(e=>e.source_id));
