@@ -61,3 +61,13 @@ O serviço Sites que fornece as ferramentas também precisa ser atualizado para 
 O dashboard mostra os próximos 12 meses clicáveis. Navegar não grava previsões: as projeções são calculadas a partir dos originais ativos, e respeitam exclusões mensais explícitas. “Aplicar” no painel Recorrentes continua sendo uma ação explícita para materializar previsões. O detalhamento de uma previsão permite editar seu original sem criar um gasto novo.
 
 O campo Forma de pagamento permite revisar legados. A classificação explícita fica em notes (@finance-payment), preservando viagem e demais metadados. Compras com metadados de cartão sempre são crédito; “COMPRA CARTAO VISA” num extrato bancário não é evidência de crédito. O assistente aceita payment_method opcional nos novos registros. `summary` mantém o formato legado e expõe `views.purchases`, `views.cash` e `views.commitments`, com as mesmas regras do dashboard. Saldo bancário continua documentado separadamente.
+
+## Posições de contas e aplicações
+
+`bank_balance_snapshots` agora identifica instituição, conta/aplicação e tipo (checking ou investment), mantendo histórico por data do extrato. Reimportar a mesma posição é idempotente; um extrato antigo não substitui a posição mais recente. A API devolve total em contas, total aplicado e total registrado. Ausência de saldo aplicado é null (“Não informado”), não zero presumido. Os saldos não criam nem alteram lançamentos em entries.
+
+Ao selecionar um extrato, o app registra separadamente seus saldos comprovados antes da revisão dos movimentos. OFC/OFX usam o fechamento contábil e a data respectiva (DTASOF; emissão ou fim do período como alternativas), nunca limite disponível ou saldo inicial. PDFs Unicred usam fechamento e emissão; JSON pode conter balances explícitos. Arquivos sem saldo/data reconhecíveis mantêm os saldos existentes. Data futura pede confirmação da referência real na interface; não é silenciosamente substituída pela data de envio. O quadro mostra simultaneamente cada conta, sua referência, totais e aplicações. Há registro manual de posições de aplicações.
+
+A conexão MCP oferece consultar_saldos e registrar_saldo_conta; o usuário autorizou registrar o saldo a cada extrato enviado. As instruções exigem valor final, conta e data comprovados, sem deduzir dinheiro aplicado por aportes ou categorias de despesa. O backend confirma saved e verified após reler a posição gravada.
+
+Validação: tests/balances.test.js cobre OFC/OFX com várias contas, exclusão de cheque especial, data futura/inválida, PDF, aplicações explícitas, migração SQL, histórico, idempotência, consolidação e preservação de entries. Teste MCP cobre esquema, encaminhamento e ausência de confirmação falsa.

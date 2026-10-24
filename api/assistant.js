@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.js';
 import { cardDetails } from '../lib/card.js';
 import { normalizeFoodCategory } from '../src/food-categories.js';
 import { recordVerified, RecordError, auditPurchase, monthlySummary } from '../lib/verified-record.js';
+import { listBalances, recordBalance } from '../lib/balances.js';
 import { editVerified } from '../lib/assistant-edit.js';
 const CALLBACK = 'https://assistente-financeiro-kleber.krodovalho.chatgpt.site/connected';
 const hash = x => createHash('sha256').update(x).digest('hex');
@@ -40,6 +41,8 @@ export default async function handler(req,res) {
     if(!/^[A-Za-z0-9_-]{43}$/.test(token || '')) return res.status(401).json({error:'Conecte seu painel ao assistente.'});
     const {rows:connections}=await sql`SELECT id FROM assistant_connections WHERE token_hash=${hash(token)} AND token_expires>NOW() AND revoked=FALSE`;
     if(!connections.length) return res.status(401).json({error:'A conexão foi revogada ou expirou. Autorize novamente pelo painel.'});
+    if(action==='balances' && req.method==='GET')return res.status(200).json(await listBalances(sql));
+    if(action==='balance_record' && req.method==='POST')return res.status(201).json(await recordBalance(req.body,sql));
     if(['record','purchase','edit'].includes(action)) {
       await sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS recurrence_end_date DATE`;
       await sql`CREATE TABLE IF NOT EXISTS recurrence_occurrences (source_id TEXT PRIMARY KEY)`;
