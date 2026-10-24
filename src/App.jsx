@@ -521,6 +521,7 @@ function Finance() {
   const [detailCategory, setDetailCategory] = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [showRecurring, setShowRecurring] = useState(false);
+  const [showCommitments,setShowCommitments]=useState(false);
   const [showBudgets, setShowBudgets] = useState(false);
   const [importItems, setImportItems] = useState(null);
   const [importStatus,setImportStatus] = useState("");
@@ -584,8 +585,20 @@ function Finance() {
     toastTimer.current = setTimeout(()=>{ setToast(null); setUndoPayload(null); }, 4000);
   };
 
+  const moveMonth=offset=>{
+    const target=new Date(year,month+offset,1);
+    if(target.getFullYear()<2000 || target.getFullYear()>2099)return;
+    setYear(target.getFullYear());setMonth(target.getMonth());
+  };
+  const monthNavigation=<div aria-label="Navegação mensal" style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:16}}>
+    <button aria-label="Mês anterior" style={S.btn(false)} disabled={year===2000 && month===0} onClick={()=>moveMonth(-1)}>← Anterior</button>
+    <strong aria-live="polite" style={{color:'#75b8ff',fontSize:'1.1rem'}}>{MONTHS[month]} / {year}</strong>
+    <button aria-label="Próximo mês" style={S.btn(false)} disabled={year===2099 && month===11} onClick={()=>moveMonth(1)}>Próximo →</button>
+  </div>;
+
   // ── Computed values ──
   const monthViews=useMemo(()=>monthlyViews(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
+  const commitmentEntries=useMemo(()=>monthViews.commitments.filter(e=>e.type==='expense').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.description).localeCompare(String(b.description))),[monthViews]);
   const viewTotals=useMemo(()=>monthlyTotals(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
   const futureCommitments=useMemo(()=>Array.from({length:12},(_,i)=>{const d=new Date(year,month+i+1,1);return {year:d.getFullYear(),month:d.getMonth(),...monthlyTotals(allEntries,d.getFullYear(),d.getMonth()+1,recurrenceExclusions)};}),[allEntries,year,month,recurrenceExclusions]);
   const dashboardAll = useMemo(()=>{
@@ -864,6 +877,7 @@ function Finance() {
       </div>
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
+        {monthNavigation}
         <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
           {[["purchases","Compras no mês"],["cash","Gastos no mês"],["commitments","Parcelados e recorrentes no mês"]].map(([mode,label])=><button key={mode} style={S.btn(dashboardMode===mode)} aria-pressed={dashboardMode===mode} onClick={()=>setDashboardMode(mode)}>{label} · {fmt(viewTotals[mode])}</button>)}
         </div>
@@ -872,7 +886,7 @@ function Finance() {
           <h2 style={{fontSize:'1rem',marginBottom:8}}>Compromissos nos próximos 12 meses</h2>
           <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Parcelas e contas recorrentes já cadastradas. Toque no mês para consultar. As previsões não alteram o saldo bancário.</p>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:8}}>
-           {futureCommitments.map(m=><button key={`${m.year}-${m.month}`} style={{...S.btn(false),textAlign:'left',padding:12}} onClick={()=>{setYear(m.year);setMonth(m.month);setDashboardMode('commitments');setView('dashboard');}}><span style={{display:'block',marginBottom:6}}>{MONTHS[m.month]} / {m.year}</span><strong>{fmt(m.commitments)}</strong></button>)}
+           {futureCommitments.map(m=><button key={`${m.year}-${m.month}`} style={{...S.btn(false),textAlign:'left',padding:12}} onClick={()=>{setYear(m.year);setMonth(m.month);setDashboardMode('commitments');setView('dashboard');setShowCommitments(true);}}><span style={{display:'block',marginBottom:6}}>{MONTHS[m.month]} / {m.year}</span><strong>{fmt(m.commitments)}</strong></button>)}
           </div>
         </section>}
         {view==='dashboard' && monthViews.unknown.length>0 && <section style={{...S.card,marginBottom:16,borderColor:'#c8c87e'}}>
@@ -1106,6 +1120,22 @@ function Finance() {
       </div>
 
       {/* ── MODALS ── */}
+      <Modal show={showCommitments} onClose={()=>setShowCommitments(false)} maxWidth={760}>
+        <h2 style={{color:'#75b8ff',fontSize:'1.15rem',marginBottom:16}}>Conferir compromissos do mês</h2>
+        {monthNavigation}
+        <p style={{marginBottom:12}}><strong>{commitmentEntries.length} compromisso(s) · Total: {fmt(viewTotals.commitments)}</strong></p>
+        <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Parcelas de crédito e contas recorrentes do mês selecionado. Previsões ainda não confirmam pagamento.</p>
+        <div style={{maxHeight:'55vh',overflowY:'auto'}}>
+          {commitmentEntries.length===0 && <p style={{padding:'20px 0',color:'#aab9cb'}}>Nenhum compromisso cadastrado para este mês.</p>}
+          {commitmentEntries.map(e=>{const card=cardDetails(e);return <article key={e.id || e.source_id} style={{padding:'14px 0',borderBottom:'1px solid #35465c',overflowWrap:'anywhere'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><strong>{e.description}</strong><strong style={{color:'#ff929b',whiteSpace:'nowrap'}}>{fmt(e.amount)}</strong></div>
+            <p style={{color:'#aab9cb',fontSize:13,marginTop:6}}>{String(e.date).slice(0,10).split('-').reverse().join('/')} · {e.category}</p>
+            <p style={{color:'#75b8ff',fontSize:13,marginTop:6}}>{card?`Crédito · parcela ${card.installment}/${card.count}`:e.projection?'Recorrente · previsão calculada':e.bank==='Recorrência'?'Recorrente · previsão cadastrada':'Conta recorrente'}{e.confirmed===true?' · registro confirmado':''}</p>
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setShowCommitments(false);setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?'Conferir / editar recorrência original':'Conferir / editar lançamento'}</button>
+          </article>;})}
+        </div>
+        <button style={{...S.btn(true),marginTop:16}} onClick={()=>setShowCommitments(false)}>Fechar conferência</button>
+      </Modal>
       <Modal show={showRecurring} onClose={()=>setShowRecurring(false)}>
         <h2 style={{color:"#75b8ff",marginBottom:16}}>Lançamentos recorrentes</h2>
         <p style={{color:"#aab9cb",marginBottom:16}}>Ao abrir cada mês, os lançamentos marcados de meses anteriores aparecem automaticamente. Cada um é gerado uma vez por mês. Datas como dia 31 são ajustadas ao último dia do mês.</p>
