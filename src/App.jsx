@@ -5,6 +5,7 @@ import { api, request } from "./api.js";
 import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
 import { monthlyViews, monthlyTotals } from "./monthly-views.js";
 import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
+import { extractStatementBalances, extractUnicredBalance, statementBank } from "./statement-balances.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -34,7 +35,7 @@ const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
 
 const fmt = (v) => Number(v).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
 const pct = (v, t) => t > 0 ? ((v / t) * 100).toFixed(1) : "0.0";
-const today = new Date().toISOString().split("T")[0];
+const today = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 
 // ─── AUTO-CATEGORIZAÇÃO ─────────────────────────────────────────────────────
 const CAT_RULES = [
@@ -71,7 +72,7 @@ function parseOFX(content) {
     const date = dtRaw.length>=8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : today;
     const amount = parseFloat(get(b,"TRNAMT")||"0");
     const desc = (get(b,"MEMO")||get(b,"NAME")||get(b,"FITID")||"Sem descrição").replace(/&amp;/g,"&");
-    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:normalizeFoodCategory(autoCategory(desc),desc), recurring:false, source_id:get(b,"FITID"), bank:`${get(content,"ORG") || get(content,"BANKID") || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
+    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:normalizeFoodCategory(autoCategory(desc),desc), recurring:false, source_id:get(b,"FITID"), bank:`${statementBank(get(content,"BANKID"),get(content,"ORG")) || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
   }
   return results;
 }
@@ -96,7 +97,7 @@ async function parseUnicredPDF(file) {
     lines.sort((a,b)=>b.y-a.y);
     for(const line of lines)rows.push(line.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(" ").replace(/\s+/g," ").trim());
   }
-  return parseUnicredRows(rows, autoCategory);
+  return rows;
 }
 
 // ─── CSV PARSER ─────────────────────────────────────────────────────────────
@@ -502,7 +503,8 @@ function Finance() {
   const [filterDestination,setFilterDestination]=useState("");
   const [budgets, setBudgets]       = useState({});
   const [bankBalances,setBankBalances]=useState([]);
-  const [balanceForm,setBalanceForm]=useState({bank:"Caixa",balance:"",as_of:"2026-10-13T16:19"});
+  const [balanceForm,setBalanceForm]=useState({bank:"Caixa",account:"",kind:"checking",balance:"",as_of:today});
+  const [pendingStatementBalances,setPendingStatementBalances]=useState([]);
   const [balanceBusy,setBalanceBusy]=useState(false);
   const [syncError, setSyncError] = useState("");
   const [lastSync, setLastSync] = useState(null);
@@ -560,7 +562,7 @@ function Finance() {
   const loadBankBalances=useCallback(async()=>{try{const data=await api.getBankBalances();setBankBalances(data.balances||[]);}catch(err){setSyncError(err.message);}},[]);
   const saveBalance=async()=>{
     setBalanceBusy(true);
-    try {await api.saveBankBalance(balanceForm.bank,Number(balanceForm.balance.replace(',','.')),new Date(balanceForm.as_of).toISOString());await loadBankBalances();showToast('Saldo do extrato registrado sem criar receitas ou despesas.');}
+    try {const result=await api.saveBankBalance({...balanceForm,balance:Number(balanceForm.balance.replace(',','.')),source:'Registro manual'});if(!result.saved||!result.verified)throw new Error('O saldo não recebeu confirmação de gravação.');await loadBankBalances();showToast(result.is_latest?'Saldo registrado sem criar receita ou despesa.':'Saldo histórico registrado; posição mais recente preservada.');}
     catch(err){setSyncError(err.message);}finally{setBalanceBusy(false);}
   };
   const loadTrips=useCallback(async()=>{try{setTrips(normalizeTrips(await api.getTrips()));}catch(err){setSyncError(err.message);}},[]);
@@ -747,16 +749,27 @@ function Finance() {
     if(!file)return;
     setImportStatus("Lendo extrato… aguarde a revisão antes de confirmar.");
     try{
-      let items=[];
+      let items=[],snapshots=[],parseItems;
+      setPendingStatementBalances([]);
       const format=await detectImportFormat(file);
-      if(format==='pdf')items=await parseUnicredPDF(file);
-      else{
-        const content=await file.text();
-        if(format==='ofx')items=parseOFX(content);
-        else if(format==='csv')items=parseCSV(content);
-        else items=parseImportJSON(content);
+      if(format==='pdf'){
+        const rows=await parseUnicredPDF(file);snapshots=extractUnicredBalance(rows,{name:file.name});
+        parseItems=()=>parseUnicredRows(rows,autoCategory);
+      }else{
+        const content=await file.text();snapshots=extractStatementBalances(content,{name:file.name});
+        parseItems=()=>format==='ofx'?parseOFX(content):format==='csv'?parseCSV(content):parseImportJSON(content);
       }
-      if(!items.length)throw new Error("Nenhuma transação encontrada no arquivo.");
+      let savedBalances=0;
+      for(const snapshot of snapshots.filter(s=>!s.needs_date)){
+        const result=await api.saveBankBalance(snapshot);
+        if(!result.saved||!result.verified)throw new Error('Não foi possível conferir o saldo do extrato.');
+        savedBalances++;setBankBalances(result.balances || []);
+      }
+      setPendingStatementBalances(snapshots.filter(s=>s.needs_date).map(s=>({...s,as_of:''})));
+      const balanceMessage=savedBalances?`${savedBalances} saldo(s) registrado(s) pela data do extrato. `:snapshots.some(s=>s.needs_date)?'O saldo aguarda confirmação da data de referência abaixo. ':'Arquivo sem saldo final ou data identificável; saldos preservados. ';
+      try{items=parseItems();}catch(error){setImportStatus(balanceMessage+error.message);showToast(balanceMessage+error.message);return;}
+      if(!items.length){setImportStatus(balanceMessage+'Nenhuma movimentação para importar.');return;}
+
       const latest=await api.getAllEntries();
       if(!Array.isArray(latest))throw new Error("Não foi possível conferir os lançamentos existentes. Atualize antes de importar.");
       setAllEntries(latest);
@@ -764,7 +777,7 @@ function Finance() {
         latest.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
         reconciliationCandidates(item,latest).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
       })));
-      setImportStatus(`${items.length} movimentações lidas. Revise e confirme a importação; nada foi salvo ainda.`);
+      setImportStatus(balanceMessage+`${items.length} movimentações lidas. Revise e confirme os lançamentos; eles ainda não foram gravados.`);
     }catch(err){setImportStatus(err.message||"Erro ao ler o arquivo.");showToast(err.message||"Erro ao ler o arquivo.");}
   };
 
@@ -833,7 +846,7 @@ function Finance() {
 
             <label title="Importar PDF Unicred / OFX / CSV / JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Upload size={14}/> Importar PDF / arquivos
-              <input type="file" accept=".json,.ofx,.OFX,.csv,.pdf,application/pdf" onChange={handleFileImport} style={{ display:"none" }}/>
+              <input type="file" accept=".json,.ofx,.ofc,.OFX,.OFC,.csv,.pdf,application/pdf" onChange={handleFileImport} style={{ display:"none" }}/>
             </label>
             <button onClick={exportJSON} title="Exportar JSON" style={{ display:"flex",alignItems:"center",gap:"6px",padding:"0.5rem 0.9rem",background:"#253244",border:"1px solid #35465c",borderRadius:"8px",cursor:"pointer",color:"#aab9cb",fontSize:"0.8rem" }}>
               <Download size={14}/> Exportar
@@ -895,17 +908,32 @@ function Finance() {
           <div style={{maxHeight:200,overflowY:'auto',marginTop:8}}>{monthViews.unknown.map(e=><div key={e.id || e.source_id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 0'}}><span>{e.description} · {fmt(e.amount)}</span><button style={S.btn(false)} onClick={()=>setEditEntry(e.projection?allEntries.find(r=>r.id===e.root_id):e)}>Revisar</button></div>)}</div>
         </section>}
         {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
-          <h2 style={{fontSize:'1rem',marginBottom:8}}>Saldos bancários por extrato</h2>
-          <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Último saldo documentado por conta. Não inclui cheque especial e não representa atualização em tempo real.</p>
-          {bankBalances.map(b=><div key={b.bank} style={{display:'flex',justifyContent:'space-between',gap:10,marginBottom:8}}><span>{b.bank} · {new Date(b.as_of).toLocaleString('pt-BR')}</span><strong>{fmt(b.balance)}</strong></div>)}
-          <div style={{borderTop:'1px solid #35465c',paddingTop:10,marginTop:8,display:'flex',justifyContent:'space-between',gap:8}}><strong>Saldo consolidado documentado</strong><strong>{bankBalances.length?fmt(bankBalances.reduce((a,b)=>a+Number(b.balance),0)):'Aguardando registro'}</strong></div>
-          <p style={{fontSize:12,color:'#aab9cb',margin:'12px 0'}}>Registrar saldo de extrato, sem criar lançamento:</p>
-          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-            <select style={{...S.input,flex:'1 1 100px'}} aria-label="Banco" value={balanceForm.bank} onChange={e=>setBalanceForm(x=>({...x,bank:e.target.value}))}><option>Caixa</option><option>Unicred</option></select>
-            <input style={{...S.input,flex:'1 1 100px'}} aria-label="Saldo bancário" placeholder="Saldo R$" value={balanceForm.balance} onChange={e=>setBalanceForm(x=>({...x,balance:e.target.value}))}/>
-            <input style={{...S.input,flex:'1 1 180px'}} aria-label="Data e hora do extrato" type="datetime-local" value={balanceForm.as_of} onChange={e=>setBalanceForm(x=>({...x,as_of:e.target.value}))}/>
-            <button style={S.btn(true)} disabled={balanceBusy||!balanceForm.balance.trim()} onClick={saveBalance}>{balanceBusy?'Salvando…':'Registrar saldo'}</button>
+          <h2 style={{fontSize:'1.1rem',marginBottom:12}}>Dinheiro em contas e aplicações</h2>
+          <p style={{color:'#aab9cb',fontSize:13,marginBottom:14}}>Posições informadas nos extratos, com a data de referência de cada conta. Cheque especial não entra no saldo. Atualizações de saldo não criam receitas ou despesas.</p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
+            {['checking','investment'].map(kind=>{const positions=bankBalances.filter(b=>(b.kind || 'checking')===kind);return <div key={kind} style={{background:'#10151d',padding:16,border:'1px solid #35465c',borderRadius:10}}>
+              <p style={S.label}>{kind==='checking'?'Disponível em contas':'Dinheiro aplicado'}</p>
+              <strong style={{display:'block',fontSize:'1.5rem',color:kind==='checking'?'#75b8ff':'#53d6a0',marginTop:8}}>{positions.length?fmt(positions.reduce((sum,b)=>sum+Number(b.balance),0)):'Não informado'}</strong>
+              {positions.map(b=><div key={`${b.bank}-${b.account}-${kind}`} style={{paddingTop:12,marginTop:12,borderTop:'1px solid #35465c'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}><span>{b.bank}{b.account?` · ${kind==='checking'?'conta ':''}${b.account}`:''}</span><strong>{fmt(b.balance)}</strong></div><small style={{color:'#aab9cb'}}>Referência: {new Date(b.as_of).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})}</small></div>)}
+            </div>;})}
+            <div style={{background:'#10151d',padding:16,border:'1px solid #35465c',borderRadius:10}}><p style={S.label}>Total registrado · contas + aplicações</p><strong style={{display:'block',fontSize:'1.5rem',color:'#75b8ff',marginTop:8}}>{bankBalances.length?fmt(bankBalances.reduce((sum,b)=>sum+Number(b.balance),0)):'Aguardando extrato'}</strong>{!bankBalances.some(b=>b.kind==='investment')&&<p style={{color:'#aab9cb',fontSize:12,marginTop:10}}>Saldo das aplicações ainda não informado.</p>}</div>
           </div>
+          <details>
+            <summary style={{cursor:'pointer',color:'#75b8ff'}}>Registrar ou atualizar saldo manualmente</summary>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:10,marginTop:14}}>
+              <label style={S.label}>Tipo<select aria-label="Tipo de saldo" style={S.input} value={balanceForm.kind} onChange={e=>setBalanceForm(f=>({...f,kind:e.target.value}))}><option value="checking">Conta bancária</option><option value="investment">Aplicação financeira</option></select></label>
+              <label style={S.label}>Instituição<input aria-label="Instituição do saldo" style={S.input} value={balanceForm.bank} onChange={e=>setBalanceForm(f=>({...f,bank:e.target.value}))}/></label>
+              <label style={S.label}>Conta ou aplicação<input aria-label="Conta ou aplicação" placeholder="Ex.: 134279 ou CDB" style={S.input} value={balanceForm.account} onChange={e=>setBalanceForm(f=>({...f,account:e.target.value}))}/></label>
+              <label style={S.label}>Saldo (R$)<input aria-label="Saldo bancário" placeholder="Saldo atual" style={S.input} value={balanceForm.balance} onChange={e=>setBalanceForm(f=>({...f,balance:e.target.value}))}/></label>
+              <label style={S.label}>Data de referência<input aria-label="Data do saldo" type="date" max={today} style={S.input} value={balanceForm.as_of} onChange={e=>setBalanceForm(f=>({...f,as_of:e.target.value}))}/></label>
+            </div>
+            <button style={{...S.btn(true),marginTop:12}} disabled={balanceBusy||!balanceForm.balance.trim()||!balanceForm.account.trim()||!balanceForm.bank.trim()||!balanceForm.as_of} onClick={saveBalance}>{balanceBusy?'Salvando…':'Registrar saldo'}</button>
+          </details>
+          {pendingStatementBalances.map((s,i)=><div key={`${s.bank}-${s.account}`} style={{marginTop:16,padding:12,border:'1px solid #c8c87e',borderRadius:8}}>
+            <p>{s.bank} · conta {s.account} · saldo {fmt(s.balance)}</p><p style={{color:'#aab9cb',fontSize:13,margin:'8px 0'}}>O arquivo indica uma data futura ({String(s.reported_as_of).slice(0,10).split('-').reverse().join('/')}). Confirme a data de referência real do saldo para registrá-lo.</p>
+            <input aria-label={`Data de referência ${s.bank}`} type="date" max={today} style={S.input} value={s.as_of} onChange={e=>setPendingStatementBalances(items=>items.map((item,n)=>n===i?{...item,as_of:e.target.value}:item))}/>
+            <button style={{...S.btn(true),marginTop:10}} disabled={saving||!s.as_of} onClick={()=>saveSafely(async()=>{const {needs_date,reported_as_of,...snapshot}=s;const result=await api.saveBankBalance(snapshot);if(!result.saved||!result.verified)throw new Error('Saldo não confirmado.');setBankBalances(result.balances);setPendingStatementBalances(items=>items.filter((_,n)=>n!==i));showToast('Saldo registrado na data confirmada.');})}>Confirmar data e registrar saldo</button>
+          </div>)}
         </section>}
         {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>
           <p style={S.label}>Custo total das viagens · todos os meses</p>
