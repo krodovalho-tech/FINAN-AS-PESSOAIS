@@ -5,8 +5,9 @@ export function mockPool(initial=[], mutate=null) {
   if(q==='BEGIN')backup=structuredClone(state);
   if(q==='ROLLBACK')state=backup;
   if(q.startsWith('SELECT *'))return {rows:structuredClone(state)};
-  if(q.startsWith('INSERT')){inserts++;let row={id:state.length+1,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4],notes:v[5],source_id:v[6],bank:'Assistente',confirmed:false};if(mutate)row=mutate(row,inserts);state.push(row);}
+  if(q.startsWith('INSERT')){inserts++;let row={id:state.length+1,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4],notes:v[5],source_id:v[6],bank:'Assistente',confirmed:false,recurring:!!v[7],recurrence_end_date:v[8] || null};if(mutate)row=mutate(row,inserts);state.push(row);}
   return {rows:[]};
  }};
  return {connect:async()=>client,state:()=>structuredClone(state),queries};
 }
+

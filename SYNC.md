@@ -34,3 +34,30 @@ Ambas as operações usam transação e bloqueio curto da tabela contra escritas
 `POST ...?action=audit` permite conferir registros existentes sem escrever: `entry_ids`, `expected_amount` total e `destination` opcional. `summary` mantém a resposta mensal por parcelas para compatibilidade e expõe `views.installments` e `views.purchases`, com identificação explícita do modo.
 
 O conector privado expõe `registrar_compra_parcelada` e `conferir_compra`, além de `registrar_lancamento`; não aceita confirmação de nova gravação sem `verified=true`. Os testes usam dados fictícios e simulação de falhas de banco; não criam registros de teste na conta de produção.
+
+
+## Recorrência com data final
+
+Após publicar esta mudança, execute **Preparar banco** para adicionar a coluna opcional `recurrence_end_date` (migração idempotente). Na edição de um lançamento original, marque **Recorrente** e preencha **Recorre até (opcional)**. O mesmo campo está em **Recorrentes → Editar informações**. Vazio mantém a repetição mensal sem prazo. A tela informa o número total de pagamentos, incluindo o original; a última ocorrência deve vencer até a data informada, inclusive. Para vencimentos no dia 31, fevereiro usa seu último dia.
+
+O prazo é salvo no banco, devolvido pela API e preservado na exportação/importação JSON. A geração mensal respeita o limite. Encurtar o prazo remove apenas as previsões da série após a data final que ainda não foram confirmadas, preservando o lançamento original e pagamentos confirmados; prorrogar permite gerar novamente os meses removidos pelo limite, sem duplicar os já existentes. Nenhum contrato real recebe uma data final presumida.
+
+Validação específica: `node --test tests/recurrence-end.test.js` executa regras de calendário e os endpoints contra Postgres em memória (PGlite), incluindo migração, edição, limite inclusivo, reimportação dos metadados, proteção de confirmados, prorrogação e idempotência.
+
+### Recorrência pela conexão do ChatGPT
+
+`record` aceita `recurring` booleano opcional e `recurrence_end_date` opcional (YYYY-MM-DD inclusivo ou null). Omitir mantém a gravação simples. `purchase` continua proibindo recorrência para não repetir compras parceladas. A conferência de gravação inclui os campos de recorrência e rejeita reenvio de um request_id com prazo diferente.
+
+`entries` devolve `recurring` e `recurrence_end_date` tanto na busca quanto por ID. `edit` aceita esses campos em `changes`; ao alterá-los, exige ambos no snapshot `expected`. Usa transação e releitura, preserva notas, banco, identificadores, confirmação e conciliação; responde saved e verified somente após conferir e confirmar a transação. Reduzir prazo ou desativar remove apenas previsões não confirmadas da série. A migração de recurrence_end_date é idempotente e ocorre na primeira escrita autenticada do assistente, sem necessidade de expor senha ou credenciais.
+
+O serviço Sites que fornece as ferramentas também precisa ser atualizado para anunciar os campos, validá-los e repassá-los. Publicar apenas o painel não atualiza as ferramentas disponíveis no ChatGPT. Testes específicos: `node --test tests/assistant-recurrence.test.js tests/recurrence-end.test.js tests/verified-record.test.js`.
+
+## Três visões mensais e projeção
+
+- **Compras no mês:** despesas pelo valor integral e data da compra, incluindo crédito e demais meios; compras parceladas são agrupadas uma vez por purchase_id. Previsões recorrentes ainda não confirmadas não são novas compras.
+- **Gastos no mês:** despesas fora do crédito (débito, Pix, dinheiro, ticket e conta bancária). Forma desconhecida exige revisão, não é presumida como débito.
+- **Parcelados e recorrentes no mês:** parcelas de crédito registradas para o mês e despesas recorrentes, atuais e projetadas, respeitando data final inclusiva. Um item nos dois grupos entra uma vez. As três visões se sobrepõem e não devem ser somadas.
+
+O dashboard mostra os próximos 12 meses clicáveis. Navegar não grava previsões: as projeções são calculadas a partir dos originais ativos, e respeitam exclusões mensais explícitas. “Aplicar” no painel Recorrentes continua sendo uma ação explícita para materializar previsões. O detalhamento de uma previsão permite editar seu original sem criar um gasto novo.
+
+O campo Forma de pagamento permite revisar legados. A classificação explícita fica em notes (@finance-payment), preservando viagem e demais metadados. Compras com metadados de cartão sempre são crédito; “COMPRA CARTAO VISA” num extrato bancário não é evidência de crédito. O assistente aceita payment_method opcional nos novos registros. `summary` mantém o formato legado e expõe `views.purchases`, `views.cash` e `views.commitments`, com as mesmas regras do dashboard. Saldo bancário continua documentado separadamente.

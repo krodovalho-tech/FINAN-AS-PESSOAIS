@@ -1,7 +1,7 @@
 import { normalizeFoodCategory } from '../src/food-categories.js';
 import { requireAuth } from '../lib/auth.js';
 import { sql } from '@vercel/postgres';
-import { validEntry } from '../lib/entry-validation.js';
+import { validEntry, validRecurrenceEnd } from '../lib/entry-validation.js';
 import { importBatch } from '../lib/import-batch.js';
 
 
@@ -14,7 +14,7 @@ function normDate(d) {
   return m ? m[1] : s;
 }
 function normalizeRows(rows) {
-  return rows.map(r => ({ ...r, date: normDate(r.date) }));
+  return rows.map(r => ({ ...r, date: normDate(r.date), recurrence_end_date: normDate(r.recurrence_end_date) }));
 }
 
 export default async function handler(req, res) {
@@ -50,13 +50,13 @@ export default async function handler(req, res) {
 
     // ── CREATE ────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
-      const { type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation } = req.body;
+      const { type, category, description, amount, date, recurring, recurrence_end_date, notes, source_id, bank, confirmed, reconciliation } = req.body;
       if (!validEntry(req.body)) {
         return res.status(400).json({ error: 'Campos obrigatórios: type, category, description, amount, date' });
       }
       const { rows } = await sql`
-        INSERT INTO entries (type, category, description, amount, date, recurring, notes, source_id, bank, confirmed, reconciliation)
-        VALUES (${type}, ${type === 'expense' ? normalizeFoodCategory(category,description) : category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${notes||null}, ${source_id||null}, ${bank||null}, ${confirmed===true}, ${reconciliation ? JSON.stringify(reconciliation) : null}::jsonb)
+        INSERT INTO entries (type, category, description, amount, date, recurring, recurrence_end_date, notes, source_id, bank, confirmed, reconciliation)
+        VALUES (${type}, ${type === 'expense' ? normalizeFoodCategory(category,description) : category}, ${description}, ${parseFloat(amount)}, ${date}, ${!!recurring}, ${recurring ? recurrence_end_date || null : null}, ${notes||null}, ${source_id||null}, ${bank||null}, ${confirmed===true}, ${reconciliation ? JSON.stringify(reconciliation) : null}::jsonb)
         RETURNING *
       `;
       return res.status(201).json(normalizeRows(rows)[0]);
@@ -66,15 +66,15 @@ export default async function handler(req, res) {
     if (req.method === 'PUT') {
       const { id } = req.query;
       if (!/^[1-9]\d*$/.test(String(id || ''))) return res.status(400).json({ error: 'Identificador inválido' });
-      const { type, category, description, amount, date, recurring, notes } = req.body || {};
+      const { type, category, description, amount, date, recurring, recurrence_end_date, notes } = req.body || {};
       if (!validEntry(req.body)) return res.status(400).json({ error: 'Confira descrição, categoria, valor positivo e data válida.' });
       const { rows } = await sql`
         WITH previous AS MATERIALIZED (
-          SELECT id, recurring, bank FROM entries WHERE id=${parseInt(id, 10)} FOR UPDATE
+          SELECT id, recurring, bank, recurrence_end_date FROM entries WHERE id=${parseInt(id, 10)} FOR UPDATE
         ), updated AS (
         UPDATE entries
         SET type=${type}, category=${type === 'expense' ? normalizeFoodCategory(category,description) : category}, description=${description},
-            amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}, notes=${notes||null}
+            amount=${parseFloat(amount)}, date=${date}, recurring=${!!recurring}, recurrence_end_date=${recurring ? recurrence_end_date || null : null}, notes=${notes||null}
         FROM previous
         WHERE entries.id=previous.id
         RETURNING entries.*
@@ -90,6 +90,14 @@ export default async function handler(req, res) {
               WHERE forecast.bank='Recorrência' AND forecast.source_id=occurrence.source_id
             )
           RETURNING occurrence.source_id
+        ), removed AS (
+          DELETE FROM entries forecast USING updated
+          WHERE updated.bank IS DISTINCT FROM 'Recorrência'
+            AND updated.recurrence_end_date IS NOT NULL AND forecast.date>updated.recurrence_end_date
+            AND forecast.bank='Recorrência' AND forecast.source_id LIKE (updated.id::text || ':%')
+            AND forecast.confirmed IS NOT TRUE RETURNING forecast.source_id
+        ), reset_removed AS (
+          DELETE FROM recurrence_occurrences WHERE source_id IN (SELECT source_id FROM removed) RETURNING source_id
         ) SELECT * FROM updated
       `;
       if (!rows.length) return res.status(404).json({ error: 'Lançamento não encontrado' });
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
       if (!Array.isArray(bulk) || !bulk.length) {
         return res.status(400).json({ error: 'Array entries obrigatório' });
       }
-      const valid = bulk.every(e => ['income','expense'].includes(e.type) && typeof e.category === 'string' && e.category.length <= 60 && typeof e.description === 'string' && e.description.trim() && Number.isFinite(Number(e.amount)) && Number(e.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''));
+      const valid = bulk.every(e => validRecurrenceEnd(e) && ['income','expense'].includes(e.type) && typeof e.category === 'string' && e.category.length <= 60 && typeof e.description === 'string' && e.description.trim() && Number.isFinite(Number(e.amount)) && Number(e.amount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''));
       if (!valid || bulk.length > 5000) return res.status(400).json({ error: 'Importação inválida. Revise os lançamentos.' });
       if (bulk.some(e => e.match_id && (!Number.isSafeInteger(e.match_id) || e.match_id < 1 || !e.match_expected))) return res.status(400).json({ error: 'Vínculo de conciliação inválido.' });
       if (bulk.some(e => e.import_action && !['new','skip','match','card_payment'].includes(e.import_action))) return res.status(400).json({ error: 'Ação de importação inválida.' });
@@ -132,6 +140,7 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Não foi possível acessar o banco. Verifique a conexão e a configuração das tabelas.' });
   }
 }
+
 
 
 

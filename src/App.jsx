@@ -3,7 +3,8 @@ import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
 import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
-import { normalizeEntryForm } from "./entry-form.js";
+import { monthlyViews, monthlyTotals } from "./monthly-views.js";
+import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -282,13 +283,25 @@ function TripsModal({show,onClose,trips,entries,onSave,onDelete,saving}) {
   </Modal>;
 }
 
+function RecurrenceEndField({form,set,saving}) {
+ const end=form.recurrence_end_date || '';
+ return <div style={{display:'grid',gap:8}}>
+  <label style={S.label}>Recorre até (opcional)
+   <input aria-label="Recorre até" type="date" min={form.date} style={S.input} value={end} disabled={saving} onChange={e=>set('recurrence_end_date',e.target.value)}/>
+  </label>
+  <small style={{color:end && end<form.date ? '#ff929b' : '#aab9cb'}}>
+   {end && end<form.date ? 'A data final deve ser igual ou posterior à data original.' : end ? `${recurrenceCount(form.date,end)} pagamentos mensais, incluindo este lançamento. Não gera previsões após a data final.` : 'Sem data final: repete mensalmente por prazo indeterminado.'}
+  </small>
+ </div>;
+}
+
 function RecurringItem({entry,saving,onSave,onStop,trips}) {
   const [editing,setEditing]=useState(false),[confirm,setConfirm]=useState(false);
   const [form,setForm]=useState(()=>normalizeEntryForm(entry,today));
   const set=(key,value)=>setForm(f=>({...f,[key]:value}));
-  const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date;
+  const valid=!!form.description?.trim() && Number(form.amount)>0 && !!form.date && (!form.recurrence_end_date || form.recurrence_end_date>=form.date);
   return <div style={{padding:"16px 0",borderBottom:"1px solid #35465c"}}>
-    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#75b8ff"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#aab9cb"}}>{entry.category}</small></div>
+    <div style={{overflowWrap:"anywhere"}}>{entry.description}<br/><span style={{color:"#75b8ff"}}>{fmt(entry.amount)} · dia {String(entry.date).slice(8,10)}</span><br/><small style={{color:"#aab9cb"}}>{entry.category}{entry.recurrence_end_date ? ` · até ${String(entry.recurrence_end_date).slice(0,10).split("-").reverse().join("/")} · ${recurrenceCount(String(entry.date).slice(0,10),String(entry.recurrence_end_date).slice(0,10))} pagamentos no total` : " · sem data final"}</small></div>
     {!editing && <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}><button disabled={saving} style={S.btn(false)} onClick={()=>{setForm(normalizeEntryForm(entry,today));setEditing(true);setConfirm(false);}}>Editar informações</button><button disabled={saving} style={{...S.btn(false),color:"#ff929b"}} onClick={()=>setConfirm(true)}>Cancelar recorrência</button></div>}
     {editing && <div style={{display:"grid",gap:12,marginTop:16}}>
       <label style={S.label}>Descrição<input style={S.input} value={form.description} onChange={e=>set("description",e.target.value)}/></label>
@@ -297,6 +310,7 @@ function RecurringItem({entry,saving,onSave,onStop,trips}) {
       <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
       <label style={S.label}>Valor (R$)<input style={S.input} type="number" min="0.01" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)}/></label>
       <label style={S.label}>Data original / dia do vencimento<input style={S.input} type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></label>
+      <RecurrenceEndField form={form} set={set} saving={saving}/>
       <label style={S.label}>Observações<textarea style={S.input} value={form.notes || ""} onChange={e=>set("notes",e.target.value)}/></label>
       <p style={{fontSize:13,color:"#aab9cb"}}>Altera o lançamento original e suas previsões ainda não confirmadas. O dia do vencimento é aplicado nos meses seguintes.</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button style={S.btn(true)} disabled={saving || !valid} onClick={async()=>{if(await onSave(form))setEditing(false);}}>{saving?"Salvando…":"Salvar alterações"}</button><button style={S.btn(false)} disabled={saving} onClick={()=>setEditing(false)}>Descartar alterações</button></div>
@@ -312,7 +326,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
   useEffect(() => { setForm(normalizeEntryForm(initial,today)); },[initial,show]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const card = cardDetails(initial);
-  const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && !saving;
+  const valid = !!form.description?.trim() && Number(form.amount)>0 && !!form.date && (!form.recurring || !form.recurrence_end_date || form.recurrence_end_date>=form.date) && !saving;
   return (
     <Modal show={show} onClose={onClose}>
       <h2 style={{ margin:"0 0 1.2rem",fontSize:"1rem",color:"#75b8ff",textTransform:"uppercase",letterSpacing:"0.07em" }}>
@@ -331,6 +345,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
           </select>
         </div>
         <DestinationField value={form.destination} onChange={v=>set("destination",v)} trips={trips}/>
+        {!card && !form.cardPurchase && <label style={S.label}>Forma de pagamento<select aria-label="Forma de pagamento" value={form.payment_method || 'unknown'} onChange={e=>set('payment_method',e.target.value)} style={S.input}>{[['unknown','Não informado'],['credit','Crédito'],['debit','Débito'],['pix','Pix'],['cash','Dinheiro'],['ticket','Ticket / benefício'],['bank','Conta bancária / boleto']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
         <div>
           <label style={S.label}>Descrição</label>
           <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Ex: Fatura Nubank março" style={S.input} onKeyDown={e=>e.key==="Enter"&&valid&&onSave(form)}/>
@@ -359,6 +374,7 @@ function EntryModal({ show, onClose, onSave, initial, saving, trips }) {
           <input type="checkbox" disabled={form.bank==="Recorrência" || saving || form.cardPurchase || !!card} checked={form.recurring && !form.cardPurchase && !card} onChange={e=>set("recurring",e.target.checked)} style={{ accentColor:"#75b8ff" }}/>
           {form.bank==="Recorrência" ? "Gerado por recorrência; edição vale só para este mês" : "Recorrente (aparece automaticamente nos meses seguintes)"}
         </label>
+        {form.recurring && form.bank!=="Recorrência" && !form.cardPurchase && !card && <RecurrenceEndField form={form} set={set} saving={saving}/>}
         <button onClick={()=>valid&&onSave(form)} disabled={!valid} style={{ background:valid?"#75b8ff":"#253244",color:valid?"#10151d":"#8fa2bb",border:"none",borderRadius:"8px",padding:"0.85rem",fontWeight:"600",cursor:valid?"pointer":"not-allowed",fontSize:"0.9rem",marginTop:"0.4rem",fontFamily:"'Source Sans 3',sans-serif" }}>
           {saving?"Salvando…":isEdit?"Salvar Alterações":"Confirmar Lançamento"}
         </button>
@@ -480,6 +496,7 @@ function Finance() {
   const [year, setYear]             = useState(now.getFullYear());
   const [entries, setEntries]       = useState([]);
   const [allEntries, setAllEntries] = useState([]);
+  const [recurrenceExclusions,setRecurrenceExclusions]=useState([]);
   const [trips,setTrips]=useState([]);
   const [showTrips,setShowTrips]=useState(false);
   const [filterDestination,setFilterDestination]=useState("");
@@ -515,12 +532,7 @@ function Finance() {
     const sequence = ++monthRequest.current;
     setLoading(true);
     try {
-      const generated = await api.applyRecurring(month,year);
       const data = await api.getEntries(month, year);
-      if (generated.inserted>0) {
-        const all = await api.getAllEntries();
-        if (sequence === monthRequest.current) setAllEntries(all);
-      }
       if (sequence !== monthRequest.current) return;
       setEntries(data); setSyncError(""); setLastSync(new Date());
     } catch (err) { if (sequence === monthRequest.current) setSyncError(err.message); }
@@ -529,8 +541,9 @@ function Finance() {
 
   const loadAll = useCallback(async () => {
     try {
-      const data = await api.getAllEntries();
+      const [data,exceptions] = await Promise.all([api.getAllEntries(),api.getRecurringExclusions()]);
       setAllEntries(Array.isArray(data) ? data : []);
+      setRecurrenceExclusions(exceptions.excluded || []);
     } catch (err) { setSyncError(err.message); }
   }, []);
 
@@ -572,7 +585,14 @@ function Finance() {
   };
 
   // ── Computed values ──
-  const dashboardAll = useMemo(()=>dashboardEntries(allEntries,dashboardMode),[allEntries,dashboardMode]);
+  const monthViews=useMemo(()=>monthlyViews(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
+  const viewTotals=useMemo(()=>monthlyTotals(allEntries,year,month+1,recurrenceExclusions),[allEntries,year,month,recurrenceExclusions]);
+  const futureCommitments=useMemo(()=>Array.from({length:12},(_,i)=>{const d=new Date(year,month+i+1,1);return {year:d.getFullYear(),month:d.getMonth(),...monthlyTotals(allEntries,d.getFullYear(),d.getMonth()+1,recurrenceExclusions)};}),[allEntries,year,month,recurrenceExclusions]);
+  const dashboardAll = useMemo(()=>{
+    const rows=[];
+    for(let i=-6;i<=0;i++){const d=new Date(year,month+i,1);rows.push(...monthlyViews(allEntries,d.getFullYear(),d.getMonth()+1,recurrenceExclusions)[dashboardMode]);}
+    return rows;
+  },[allEntries,dashboardMode,year,month,recurrenceExclusions]);
   const dashboardMonth = useMemo(()=>dashboardAll.filter(e=>Number(String(e.date).slice(0,4))===year && Number(String(e.date).slice(5,7))===month+1),[dashboardAll,month,year]);
   const totalIncome  = useMemo(() => dashboardMonth.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
   const totalExpense = useMemo(() => dashboardMonth.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0), [dashboardMonth]);
@@ -845,10 +865,21 @@ function Finance() {
 
       <div className="dashboard-content" style={{ padding:"1.5rem", maxWidth:"1100px", margin:"0 auto" }}>
         <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
-          <button style={S.btn(dashboardMode==='purchases')} aria-pressed={dashboardMode==='purchases'} onClick={()=>setDashboardMode('purchases')}>Compras do mês · valor total</button>
-          <button style={S.btn(dashboardMode==='installments')} aria-pressed={dashboardMode==='installments'} onClick={()=>setDashboardMode('installments')}>Parcelas do mês</button>
+          {[["purchases","Compras no mês"],["cash","Gastos no mês"],["commitments","Parcelados e recorrentes no mês"]].map(([mode,label])=><button key={mode} style={S.btn(dashboardMode===mode)} aria-pressed={dashboardMode===mode} onClick={()=>setDashboardMode(mode)}>{label} · {fmt(viewTotals[mode])}</button>)}
         </div>
-        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Despesas, saldo e categorias consideram o valor completo das compras realizadas no mês. Parcelas futuras não são somadas novamente.' : 'Despesas, saldo e categorias consideram somente as parcelas previstas para o mês.'} O resultado mensal não é o saldo bancário.</p>
+        <p style={{color:'#aab9cb',marginBottom:16}}>{dashboardMode==='purchases' ? 'Valor integral das compras do mês, no crédito e fora dele. Uma compra parcelada entra uma única vez, pela data da compra.' : dashboardMode==='cash' ? 'Despesas fora do crédito: débito, Pix, dinheiro, ticket e conta bancária. Lançamentos sem forma de pagamento identificada ficam pendentes de revisão.' : 'Parcelas do crédito com vencimento no mês e despesas recorrentes, incluindo previsões até a data final. Uma despesa que pertence aos dois grupos entra uma única vez.'} As visões se sobrepõem e não devem ser somadas. O resultado mensal não é o saldo bancário.</p>
+        {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
+          <h2 style={{fontSize:'1rem',marginBottom:8}}>Compromissos nos próximos 12 meses</h2>
+          <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Parcelas e contas recorrentes já cadastradas. Toque no mês para consultar. As previsões não alteram o saldo bancário.</p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:8}}>
+           {futureCommitments.map(m=><button key={`${m.year}-${m.month}`} style={{...S.btn(false),textAlign:'left',padding:12}} onClick={()=>{setYear(m.year);setMonth(m.month);setDashboardMode('commitments');setView('dashboard');}}><span style={{display:'block',marginBottom:6}}>{MONTHS[m.month]} / {m.year}</span><strong>{fmt(m.commitments)}</strong></button>)}
+          </div>
+        </section>}
+        {view==='dashboard' && monthViews.unknown.length>0 && <section style={{...S.card,marginBottom:16,borderColor:'#c8c87e'}}>
+          <strong>Revisar forma de pagamento: {monthViews.unknown.length} lançamento(s) · {fmt(viewTotals.unknown)}</strong>
+          <p style={{color:'#aab9cb',fontSize:13,marginTop:8}}>Sem identificação suficiente para separar crédito de débito. Esses valores permanecem no histórico e nas compras; não entram em “Gastos no mês” até a revisão.</p>
+          <div style={{maxHeight:200,overflowY:'auto',marginTop:8}}>{monthViews.unknown.map(e=><div key={e.id || e.source_id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 0'}}><span>{e.description} · {fmt(e.amount)}</span><button style={S.btn(false)} onClick={()=>setEditEntry(e.projection?allEntries.find(r=>r.id===e.root_id):e)}>Revisar</button></div>)}</div>
+        </section>}
         {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
           <h2 style={{fontSize:'1rem',marginBottom:8}}>Saldos bancários por extrato</h2>
           <p style={{color:'#aab9cb',fontSize:13,marginBottom:12}}>Último saldo documentado por conta. Não inclui cheque especial e não representa atualização em tempo real.</p>
@@ -872,9 +903,9 @@ function Finance() {
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
           {[
             { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
-            { label:"Despesas",       value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
-            { label:"Resultado do mês", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
-            { label:"Taxa de Poupança", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
+            { label:dashboardMode==="commitments"?"Comprometido no mês":dashboardMode==="cash"?"Gastos fora do crédito":"Compras no mês", value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
+            { label:dashboardMode==="commitments"?"Receitas menos compromissos":"Resultado da visão", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
+            { label:"Resultado / receitas", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
           ].map((k,i)=>(
             <div key={i} style={S.card}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.5rem" }}>
@@ -1046,7 +1077,7 @@ function Finance() {
                           {cardDetails(e) && <span>Parcela {cardDetails(e).installment}/{cardDetails(e).count} · compra {fmt(cardDetails(e).total)}</span>}
                           {travelDetails(e).destination && <span style={{color:"#75b8ff"}}>Viagem · {travelDetails(e).destination}</span>}
                           <span>{new Date(e.date+"T12:00:00").toLocaleDateString("pt-BR")}</span>
-                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : "↻ recorrente"}</span>}
+                          {(e.recurring || e.bank==="Recorrência") && <span style={{ color:"#75b8ff",fontSize:"0.65rem" }}>{e.bank==="Recorrência" ? "↻ previsto recorrente" : e.recurrence_end_date ? `↻ até ${String(e.recurrence_end_date).slice(0,10).split("-").reverse().join("/")}` : "↻ recorrente"}</span>}
                         </div>
                       </div>
                     </div>
@@ -1095,12 +1126,12 @@ function Finance() {
         <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
         <div style={{maxHeight:"55vh",overflowY:"auto"}}>
           {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
-          {detailEntries.map(e=><article key={e.id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
+          {detailEntries.map(e=><article key={e.id || e.source_id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#ff929b":"#53d6a0"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
             <p style={{color:"#b6c4d6",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
             <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
             {e.card && <p style={{color:'#aab9cb'}}>Valor completo da compra · a edição abaixo abre a parcela cadastrada.</p>}
-            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===e.id) || e);}}>Editar lançamento / observações</button>
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?"Editar recorrência original":"Editar lançamento / observações"}</button>
           </article>)}
         </div>
         <button style={{...S.btn(false),marginTop:16}} onClick={()=>setDetailCategory(null)}>Fechar</button>
@@ -1148,5 +1179,6 @@ export default function App() {
     </form>
   </main>;
 }
+
 
 

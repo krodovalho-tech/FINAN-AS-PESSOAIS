@@ -5,6 +5,12 @@ import { recurringPayload, validEntry } from '../lib/entry-validation.js';
 export default async function handler(req,res) {
  if(!requireAuth(req,res))return;
  res.setHeader('Cache-Control','no-store');
+ if(req.method==='GET'){
+  try{const exists=await sql`SELECT to_regclass('public.recurrence_occurrences') AS name`;
+   const rows=exists.rows[0]?.name?(await sql`SELECT source_id FROM recurrence_occurrences`).rows:[];
+   return res.status(200).json({excluded:rows.map(e=>e.source_id)});
+  }catch{return res.status(500).json({error:'Não foi possível carregar exceções das recorrências.'});}
+ }
  if(req.method!=='POST')return res.status(405).json({error:'Operação não permitida.'});
  const {year,month,action,id}=req.body || {};
  if(action==='edit') {
@@ -13,12 +19,19 @@ export default async function handler(req,res) {
   try {
    const prefix=`${Number(id)}:%`,day=Number(e.date.slice(8,10));
    const result=await sql`WITH original AS (
-    UPDATE entries SET type=${e.type},category=${e.type === 'expense' ? normalizeFoodCategory(e.category,e.description) : e.category},description=${e.description},amount=${Number(e.amount)},date=${e.date},notes=${e.notes || null}
+    UPDATE entries SET type=${e.type},category=${e.type === 'expense' ? normalizeFoodCategory(e.category,e.description) : e.category},description=${e.description},amount=${Number(e.amount)},date=${e.date},recurrence_end_date=${e.recurrence_end_date || null},notes=${e.notes || null}
     WHERE id=${Number(id)} AND recurring=TRUE AND bank IS DISTINCT FROM 'Recorrência' RETURNING id
    ), forecasts AS (
     UPDATE entries SET type=${e.type},category=${e.category},description=${e.description},amount=${Number(e.amount)},notes=${e.notes || null},
      date=(date_trunc('month',date)::date + (LEAST(${day},EXTRACT(DAY FROM (date_trunc('month',date)+INTERVAL '1 month - 1 day'))::int)-1))
-    WHERE bank='Recorrência' AND source_id LIKE ${prefix} AND confirmed IS NOT TRUE AND EXISTS (SELECT 1 FROM original) RETURNING id
+    WHERE bank='Recorrência' AND source_id LIKE ${prefix} AND confirmed IS NOT TRUE AND (${e.recurrence_end_date || null}::date IS NULL OR (date_trunc('month',date)::date + (LEAST(${day},EXTRACT(DAY FROM (date_trunc('month',date)+INTERVAL '1 month - 1 day'))::int)-1)) <= ${e.recurrence_end_date || null}::date) AND EXISTS (SELECT 1 FROM original) RETURNING id
+   ), removed AS (
+    DELETE FROM entries WHERE bank='Recorrência' AND source_id LIKE ${prefix} AND confirmed IS NOT TRUE
+     AND ${e.recurrence_end_date || null}::date IS NOT NULL
+     AND (date_trunc('month',date)::date + (LEAST(${day},EXTRACT(DAY FROM (date_trunc('month',date)+INTERVAL '1 month - 1 day'))::int)-1)) > ${e.recurrence_end_date || null}::date
+     AND EXISTS (SELECT 1 FROM original) RETURNING source_id
+   ), reset_removed AS (
+    DELETE FROM recurrence_occurrences WHERE source_id IN (SELECT source_id FROM removed) RETURNING source_id
    ) SELECT (SELECT COUNT(*)::int FROM original) AS updated,(SELECT COUNT(*)::int FROM forecasts) AS forecasts`;
    if(!result.rows[0]?.updated)return res.status(404).json({error:'Recorrência não encontrada ou já cancelada.'});
    return res.status(200).json({ok:true,...result.rows[0]});
@@ -53,6 +66,7 @@ export default async function handler(req,res) {
  SELECT x.* FROM jsonb_to_recordset(${json}::jsonb) AS x(type text,category text,description text,amount numeric,date date,notes text,source_id text,bank text,recurring boolean,confirmed boolean)
  JOIN entries root ON root.id=split_part(x.source_id,':',1)::integer
  WHERE root.recurring=TRUE AND root.bank IS DISTINCT FROM 'Recorrência'
+ AND (root.recurrence_end_date IS NULL OR x.date<=root.recurrence_end_date)
  ORDER BY root.id FOR UPDATE OF root
  ), first_occurrences AS (
  INSERT INTO recurrence_occurrences (source_id) SELECT source_id FROM candidates ON CONFLICT DO NOTHING RETURNING source_id
@@ -63,3 +77,4 @@ export default async function handler(req,res) {
  return res.status(200).json({inserted:result.rows.length,skipped:payload.length-result.rows.length});
  }catch{return res.status(500).json({error:'Não foi possível aplicar os recorrentes. Tente novamente.'});}
 }
+
