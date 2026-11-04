@@ -787,7 +787,11 @@ function Finance() {
       }
       if(savedBalances)await loadBankBalances();
       setPendingStatementBalances(snapshots.filter(s=>s.needs_date).map(s=>({...s,as_of:''})));
-      const balanceMessage=savedBalances?`${savedBalances} saldo(s) registrado(s) pela data do extrato. `:snapshots.some(s=>s.needs_date)?'O saldo aguarda confirmação da data de referência abaixo. ':'Arquivo sem saldo final ou data identificável; saldos preservados. ';
+      const balanceMessage=[
+        savedBalances?`${savedBalances} saldo(s) registrado(s) pela data de referência. `:'',
+        snapshots.some(s=>s.needs_date)?'Há saldo aguardando confirmação da data de referência. ':'',
+        !snapshots.length?'Arquivo sem saldo final identificável; saldos preservados. ':'',
+      ].join('');
       try{items=parseItems();}catch(error){setImportStatus(balanceMessage+error.message);showToast(balanceMessage+error.message);return;}
       if(!items.length){setImportStatus(balanceMessage+'Nenhuma movimentação para importar.');return;}
 
@@ -955,9 +959,14 @@ function Finance() {
             <button style={{...S.btn(true),marginTop:12}} disabled={balanceBusy||!balanceForm.balance.trim()||!balanceForm.account.trim()||!balanceForm.bank.trim()||!balanceForm.as_of} onClick={saveBalance}>{balanceBusy?'Salvando…':'Registrar saldo'}</button>
           </details>
           {pendingStatementBalances.map((s,i)=><div key={`${s.bank}-${s.account}`} style={{marginTop:16,padding:12,border:'1px solid #c8c87e',borderRadius:8}}>
-            <p>{s.bank} · conta {s.account} · saldo {fmt(s.balance)}</p><p style={{color:'#aab9cb',fontSize:13,margin:'8px 0'}}>O arquivo indica uma data futura ({String(s.reported_as_of).slice(0,10).split('-').reverse().join('/')}). Confirme a data de referência real do saldo para registrá-lo.</p>
+            <p>{s.bank} · conta {s.account} · saldo {fmt(s.balance)}</p><p style={{color:'#aab9cb',fontSize:13,margin:'8px 0'}}>{s.reported_as_of
+              ? `O arquivo indica uma data de saldo futura (${s.reported_as_of.slice(0,10).split('-').reverse().join('/')}).`
+              : s.period_end
+                ? `O arquivo informa o fim do período em ${s.period_end.slice(0,10).split('-').reverse().join('/')}, mas não informa a data do saldo.`
+                : 'O arquivo não informa uma data válida para o saldo.'} Confira o valor e informe a data de referência para registrá-lo.</p>
             <input aria-label={`Data de referência ${s.bank}`} type="date" max={today} style={S.input} value={s.as_of} onChange={e=>setPendingStatementBalances(items=>items.map((item,n)=>n===i?{...item,as_of:e.target.value}:item))}/>
-            <button style={{...S.btn(true),marginTop:10}} disabled={saving||!s.as_of} onClick={()=>saveSafely(async()=>{const {needs_date,reported_as_of,...snapshot}=s;const result=await api.saveBankBalance(snapshot);if(!result.saved||!result.verified)throw new Error('Saldo não confirmado.');await loadBankBalances();setPendingStatementBalances(items=>items.filter((_,n)=>n!==i));showToast('Saldo registrado na data confirmada.');})}>Confirmar data e registrar saldo</button>
+            <button style={{...S.btn(true),marginTop:10}} disabled={saving||!s.as_of} onClick={()=>saveSafely(async()=>{const {needs_date,reported_as_of,period_end,...snapshot}=s;const result=await api.saveBankBalance(snapshot);if(!result.saved||!result.verified)throw new Error('Saldo não confirmado.');await loadBankBalances();setPendingStatementBalances(items=>items.filter((_,n)=>n!==i));showToast('Saldo registrado na data confirmada.');})}>Confirmar data e registrar saldo</button>
+            <button style={{...S.btn(false),marginTop:10,marginLeft:8}} disabled={saving} onClick={()=>setPendingStatementBalances(items=>items.filter((_,n)=>n!==i))}>Descartar saldo sugerido</button>
           </div>)}
         </section>}
         {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>

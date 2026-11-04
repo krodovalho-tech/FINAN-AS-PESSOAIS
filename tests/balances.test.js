@@ -8,11 +8,14 @@ const now=new Date('2026-10-24T18:00:00Z');
 const ofc=`<OFC><ACCTSTMT><ACCTFROM><BANKID>00104<ACCTID>0001234</ACCTFROM><STMTRS><DTSTART>20261001<DTEND>20261024<LEDGER>100.25<STMTTRN><TRNAMT>-20</STMTTRN></STMTRS></ACCTSTMT></OFC>`;
 
 test('OFC/OFX extraem fechamento, identidade e data; limite disponível não é saldo',async()=>{
- const b=extractStatementBalances(ofc,{name:'statement.ofc',now});assert.equal(b.length,1);assert.equal(b[0].bank,'Caixa');assert.equal(b[0].account,'1234');assert.equal(b[0].balance,100.25);assert.equal(b[0].as_of,'2026-10-24');
+ const b=extractStatementBalances(ofc,{name:'statement.ofc',now});assert.equal(b.length,1);assert.equal(b[0].bank,'Caixa');assert.equal(b[0].account,'1234');assert.equal(b[0].balance,100.25);assert.equal(b[0].as_of,null);assert.equal(b[0].needs_date,true);assert.equal(b[0].period_end,'2026-10-24');
  const multi=`<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKACCTFROM><BANKID>136<ACCTID>1234</BANKACCTFROM><DTEND>20261025<LEDGERBAL><BALAMT>200.10<DTASOF>20261024140000[-3:BRT]</LEDGERBAL><AVAILBAL><BALAMT>10200.10<DTASOF>20261024</AVAILBAL></STMTRS></STMTTRNRS><STMTTRNRS><STMTRS><BANKACCTFROM><BANKID>136<ACCTID>5678</BANKACCTFROM><LEDGERBAL><BALAMT>30.00<DTASOF>20261024</LEDGERBAL></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
  const rows=extractStatementBalances(multi,{now});assert.equal(rows.length,2);assert.deepEqual(rows.map(r=>r.balance),[200.1,30]);assert.equal(rows[0].as_of,'2026-10-24T14:00:00-03:00');
  assert.equal(statementDate('20260230'),null);
- const future=extractStatementBalances(ofc.replace('20261024','20261026'),{now})[0];assert.equal(future.as_of,null);assert.equal(future.needs_date,true);assert.equal(future.reported_as_of,'2026-10-26');
+ const undated=multi.replace('<DTASOF>20261024140000[-3:BRT]','').replace('<OFX>','<OFX><DTSERVER>20261025');
+ const pending=extractStatementBalances(undated,{now})[0];
+ assert.equal(pending.as_of,null);assert.equal(pending.needs_date,true);assert.equal(pending.balance,200.10);
+ const future=extractStatementBalances(ofc.replace('<LEDGER>100.25','<LEDGER>100.25<DTASOF>20261026'),{now})[0];assert.equal(future.as_of,null);assert.equal(future.needs_date,true);assert.equal(future.reported_as_of,'2026-10-26');
  assert.deepEqual(extractStatementBalances('<STMTTRN><TRNAMT>1000</STMTTRN>',{now}),[]);
  assert.equal(await detectImportFormat({name:'statement.ofc',size:ofc.length,slice:()=>({text:async()=>ofc})}),'ofx');
 });
