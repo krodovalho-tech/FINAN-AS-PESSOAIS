@@ -37,3 +37,11 @@ test('compra à vista na fatura pode conciliar um registro de parcela única',()
  const multi={...target,notes:target.notes.replace('"count":1','"count":2')};
  assert.deepEqual(reconciliationCandidates(item,[multi]),[]);
 });
+
+test('conciliação aceita datas Date do banco em parcelas antigas',()=>{
+ const [item]=parse();
+ const old={...item,id:1,bank:'Assistente',date:new Date('2026-10-09T00:00:00Z'),
+  description:'Hospedagem parcela 1/3 — compra total R$ 1.050,00',reconciliation:null};
+ assert.deepEqual(reconciliationCandidates(item,[old]),[old]);
+ assert.deepEqual(reconciliationCandidates(item,[{...old,date:new Date(NaN)}]),[]);
+});
