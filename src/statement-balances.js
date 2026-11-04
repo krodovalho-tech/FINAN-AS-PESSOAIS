@@ -36,9 +36,13 @@ export function extractStatementBalances(content,{name='',now=new Date()}={}){
   const bank=statementBank(tag(block,'BANKID'),tag(block,'ORG')||tag(text,'ORG'));
   const ledger=/<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|$)/i.exec(block)?.[1];
   const amount=ledger?tag(ledger,'BALAMT'):tag(block,'LEDGER');
-  const as_of=statementDate((ledger&&tag(ledger,'DTASOF'))||tag(block,'DTSERVER')||tag(text,'DTSERVER')||tag(block,'DTEND'));
-  if(amount==null)continue;
-  const snapshot=checked({bank,account,kind:'checking',balance:amount,as_of,source:name||'Extrato OFX/OFC'},now);
+  const as_of=statementDate(ledger ? tag(ledger,'DTASOF') : tag(block,'DTASOF'));
+  const position={bank,account,kind:'checking',balance:amount,as_of,source:name||'Extrato OFX/OFC'};
+  const hasBalanceDate=Number.isFinite(Date.parse(as_of));
+  const snapshot=hasBalanceDate ? checked(position,now) :
+   bank&&account&&validAmount(amount) ? {
+    ...position,balance:Number(amount),as_of:null,needs_date:true,period_end:statementDate(tag(block,'DTEND')),
+   } : null;
   if(snapshot)found.push(snapshot);
  }
  if(found.length)return found;
