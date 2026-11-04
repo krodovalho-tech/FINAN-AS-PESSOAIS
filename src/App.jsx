@@ -431,7 +431,8 @@ function needsSkipReview(item, existing) {
 // ─── IMPORT PREVIEW MODAL ────────────────────────────────────────────────────
 function ImportModal({ show, onClose, items, onConfirm, onChange, existing, saving }) {
   const [group,setGroup] = useState('pending');
-  useEffect(()=>{if(show)setGroup(items.some(item=>item.import_action==='pending')?'pending':'new');},[show]);
+  const [showCorrections,setShowCorrections] = useState(false);
+  useEffect(()=>{if(show){setGroup(items.some(item=>item.import_action==='pending')?'pending':'new');setShowCorrections(false);}},[show]);
   if (!show) return null;
   const groupOf = e => e.import_action==='pending' ? 'pending' : e.import_action==='skip' ? 'skip' : e.import_action?.startsWith('match:') ? 'match' : 'new';
   const skipped = items.filter(e => e.import_action === 'skip');
@@ -449,6 +450,9 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
       {items[0]?.reconciliation?.invoice && <p style={{color:'#aab9cb',marginBottom:12}}>
         Fatura Unicred · {items[0].reconciliation.invoice.cycle.split('-').reverse().join('/')} · Total líquido no arquivo {fmt(items.reduce((sum,item)=>sum+(item.type==='expense'?1:-1)*Math.round(item.amount*100),0)/100)}
       </p>}
+      <label style={{display:'block',marginBottom:12}}>
+        <input type="checkbox" checked={showCorrections} onChange={event=>setShowCorrections(event.target.checked)}/> Mostrar lançamentos manuais próximos com valor diferente
+      </label>
       <p style={{color:'#aab9cb',marginBottom:12}}>Novos lançamentos serão acrescentados ao confirmar. Vincular confere seu registro sem somar novamente e preserva categoria e viagem.</p>
       {group==='pending' && !items.some(e=>groupOf(e)==='pending') && <p style={{color:'#53d6a0',marginBottom:12}}>Nenhuma dúvida pendente. Confira os novos e os valores ignorados antes de confirmar.</p>}
       {skipped.length > 0 && <section aria-label="Valores fora da importação" style={{border:'1px solid #ffce85',padding:12,borderRadius:8,marginBottom:12}}>
@@ -472,7 +476,13 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
               <select aria-label={`Conciliar ${e.description}`} style={S.input} value={e.import_action || 'new'} onChange={ev=>onChange(i,'import_action',ev.target.value)}>
                 <option value="pending">Escolha antes de salvar</option><option value="new">Cadastrar como novo (confirmo que é distinto)</option><option value="skip">Ignorar esta linha / já importada</option>
                 {e.type==='expense' && <option value="card_payment">Quitação da fatura (sem nova despesa)</option>}
-                {reconciliationCandidates(e,existing).map(t=><option key={t.id} value={`match:${t.id}`}>Vincular: {String(t.date).slice(0,10)} · {t.description} · {fmt(t.amount)}</option>)}
+                {reconciliationCandidates(e,existing,showCorrections || e.import_action?.startsWith('match:'))
+                  .filter(t=>showCorrections || e.import_action===`match:${t.id}` || Math.round(t.amount*100)===Math.round(e.amount*100))
+                  .map(t=><option key={t.id} value={`match:${t.id}`}>
+                    {Math.round(t.amount*100)===Math.round(e.amount*100)
+                      ? `Vincular: ${String(t.date).slice(0,10)} · ${t.description} · ${fmt(t.amount)}`
+                      : `Vincular e corrigir: ${String(t.date).slice(0,10)} · ${t.description} · ${fmt(t.amount)} → ${fmt(e.amount)}`}
+                  </option>)}
               </select>
             </label>
             {e.import_action==='skip' && !importedSource(e,existing) && <div role="alert" style={{gridColumn:'1 / -1',color:'#ffce85'}}>
@@ -816,7 +826,7 @@ function Finance() {
       const id=Number(item.import_action.slice(6));
       const entry=allEntries.find(e=>e.id===id);
       if (!entry) throw new Error('Atualize os lançamentos antes de conciliar.');
-      return {...item,import_action:'match',match_id:id,match_expected:{type:entry.type,category:entry.category,description:entry.description,amount:Number(entry.amount),date:String(entry.date).slice(0,10)}};
+      return {...item,import_action:'match',match_id:id,reviewed_amount_correction:Math.round(entry.amount*100)!==Math.round(item.amount*100),match_expected:{type:entry.type,category:entry.category,description:entry.description,amount:Number(entry.amount),date:String(entry.date).slice(0,10)}};
     });
     const result = await api.bulkInsert(payload);
     await loadMonth(); await loadAll();

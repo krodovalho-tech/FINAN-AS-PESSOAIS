@@ -48,7 +48,7 @@ function mockPool(initial) {
     if(q==='BEGIN')backup=structuredClone(state);
     if(q==='ROLLBACK')state=backup;
     if(q.startsWith('SELECT *'))return {rows:structuredClone(state)};
-    if(q.startsWith('UPDATE')){const e=state.find(e=>e.id===v[1]);e.confirmed=true;e.reconciliation=JSON.parse(v[0]);return {rows:[structuredClone(e)]};}
+    if(q.startsWith('UPDATE')){const e=state.find(e=>e.id===v[2]);e.confirmed=true;e.reconciliation=JSON.parse(v[0]);e.amount=v[1];return {rows:[structuredClone(e)]};}
     if(q.includes('INSERT INTO entries')){const e={id:state.length+1,type:v[0],category:v[1],description:v[2],amount:v[3],date:v[4],notes:v[6],source_id:v[7],bank:v[8],reconciliation:v[10]?JSON.parse(v[10]):null};state.push(e);return {rows:[e]};}
     return {rows:[]};
   }};
