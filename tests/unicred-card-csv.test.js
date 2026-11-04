@@ -27,3 +27,13 @@ test('parcela da fatura não é vinculada a gasto à vista nem vira compra integ
  assert.deepEqual(monthlyViews([purchase,credit],2026,11).cash,[]);
  assert.deepEqual(monthlyViews([purchase,credit],2026,11).commitments,[credit,purchase]);
 });
+
+test('compra à vista na fatura pode conciliar um registro de parcela única',()=>{
+ const [item]=parse(csv.replace(' (1/3)',''));
+ const target={...item,id:1,reconciliation:null,notes:'@finance-card:'+JSON.stringify({
+  purchase_id:'teste',installment:1,count:1,total:350,purchase_date:item.date,card:'Visa final 6654'
+ })};
+ assert.deepEqual(reconciliationCandidates(item,[target]),[target]);
+ const multi={...target,notes:target.notes.replace('"count":1','"count":2')};
+ assert.deepEqual(reconciliationCandidates(item,[multi]),[]);
+});
