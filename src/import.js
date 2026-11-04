@@ -37,3 +37,49 @@ export function parseImportJSON(content) {
   return normalizeImport(data);
 }
 
+
+const unicredHeader = ['Data','Horário','Descrição','Valor','Portador','Final do cartão','Valor em dólar','Cotação'];
+const invoiceMonths = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function splitInvoiceRow(line) {
+  const fields = line.match(/(?:^|;)(?:"(?:[^"]|"")*"|[^;"]*)/g) || [];
+  if (fields.join('') !== line) throw new Error('Linha CSV da Unicred inválida.');
+  return fields.map((field,index) => field.slice(index ? 1 : 0).trim().replace(/^"|"$/g,'').replace(/""/g,'"'));
+}
+
+export function parseUnicredCardCSV(content, name, categorize) {
+  const lines = content.replace(/^\uFEFF/,'').split(/\r?\n/).filter(line=>line.trim());
+  if (!lines[0]?.includes('Final do cartão') || splitInvoiceRow(lines[0]).join(';') !== unicredHeader.join(';')) return null;
+  const file = name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const reference = /_([a-z]+)_(\d{4})\.csv$/.exec(file);
+  const month = reference ? invoiceMonths.indexOf(reference[1])+1 : 0;
+  if (!month) throw new Error('Use o nome original da fatura Unicred, com mês e ano no final.');
+  const cycle = reference[2]+'-'+String(month).padStart(2,'0');
+  const occurrences = new Map();
+  if (lines.length === 1) throw new Error('A fatura Unicred não contém lançamentos.');
+  return lines.slice(1).map((line,index)=>{
+    const [day,time,description,value,,lastFour] = splitInvoiceRow(line);
+    const date = day?.split('/').reverse().join('-');
+    const parsedDate = new Date(date);
+    const amount = Number(value?.replace(',','.'));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0,10)!==date || !/^\d{2}:\d{2}(?::\d{2})?$/.test(time || '') ||
+        !description || !/^-?\d+(?:[.,]\d{1,2})?$/.test(value || '') ||
+        !Number.isSafeInteger(Math.round(amount*100)) || amount===0 || !/^\d{4}$/.test(lastFour || '')) {
+      throw new Error('Confira data, horário, descrição, valor e cartão na linha '+(index+2)+' da fatura Unicred.');
+    }
+    const part = /\((\d+)\/(\d+)\)\s*$/.exec(description);
+    const installment = part ? Number(part[1]) : null;
+    const count = part ? Number(part[2]) : null;
+    if (part && (installment<1 || count<installment)) throw new Error('Parcela inválida na linha '+(index+2)+' da fatura Unicred.');
+    const key = JSON.stringify([cycle,date,time,description,Math.round(amount*100)]);
+    const occurrence = (occurrences.get(lastFour+key) || 0)+1;
+    occurrences.set(lastFour+key,occurrence);
+    return {
+      type:amount<0?'income':'expense',amount:Math.abs(amount),date,description,
+      category:amount<0?'Cartão de Crédito':categorize(description),recurring:false,
+      bank:'Cartão · Unicred '+lastFour,source_id:'unicred-fatura:'+key+':'+occurrence,payment_method:'credit',
+      reconciliation:{invoice:{cycle,date,last_four:lastFour,installment,count}},
+    };
+  });
+}
