@@ -3,11 +3,11 @@ import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
 import { api, request } from "./api.js";
 import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY, normalizeTrips } from "./travel.js";
-import { monthlyViews, monthlyTotals } from "./monthly-views.js";
+import { monthlyViews, monthlyTotals, paymentMethod } from "./monthly-views.js";
 import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
-import { extractStatementBalances, extractUnicredBalance, statementBank } from "./statement-balances.js";
+import { extractStatementBalances, extractUnicredBalance, statementAccount, statementBank } from "./statement-balances.js";
 import { detectImportFormat, parseImportJSON } from "./import.js";
-import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, isCardPayment, dashboardEntries } from "../lib/card.js";
+import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, hasSource, planStatementImport, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlusCircle, Trash2, TrendingUp, TrendingDown, DollarSign, BarChart3,
@@ -72,7 +72,7 @@ function parseOFX(content) {
     const date = dtRaw.length>=8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : today;
     const amount = parseFloat(get(b,"TRNAMT")||"0");
     const desc = (get(b,"MEMO")||get(b,"NAME")||get(b,"FITID")||"Sem descrição").replace(/&amp;/g,"&");
-    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:normalizeFoodCategory(autoCategory(desc),desc), recurring:false, source_id:get(b,"FITID"), bank:`${statementBank(get(content,"BANKID"),get(content,"ORG")) || "OFX"} • ${get(content,"ACCTID") || "conta não informada"}` });
+    results.push({ type: amount>=0?"income":"expense", amount:Math.abs(amount), date, description:desc, category:normalizeFoodCategory(autoCategory(desc),desc), recurring:false, source_id:get(b,"FITID"), bank:`${statementBank(get(content,"BANKID"),get(content,"ORG")) || "OFX"} • ${statementAccount(get(content,"ACCTID")) || "conta não informada"}` });
   }
   return results;
 }
@@ -421,9 +421,8 @@ function BudgetModal({ show, onClose, onSave, onDelete, budgets }) {
 
 // A skipped row is safe automatically only when its exact source was imported.
 function importedSource(item, existing) {
-  return !!(item.bank && item.source_id && existing.some(e =>
-    (e.bank === item.bank && e.source_id === item.source_id) ||
-    e.reconciliation?.imports?.some(s => s.bank === item.bank && s.source_id === item.source_id)));
+  return existing.some(entry=>hasSource(entry,item) && entry.type===item.type &&
+    Math.round(Number(entry.amount)*100)===Math.round(Number(item.amount)*100));
 }
 function needsSkipReview(item, existing) {
   return item.import_action === 'skip' && !importedSource(item, existing) && item.skip_acknowledged !== true;
@@ -432,7 +431,7 @@ function needsSkipReview(item, existing) {
 // ─── IMPORT PREVIEW MODAL ────────────────────────────────────────────────────
 function ImportModal({ show, onClose, items, onConfirm, onChange, existing, saving }) {
   const [group,setGroup] = useState('pending');
-  useEffect(()=>{if(show)setGroup('pending');},[show]);
+  useEffect(()=>{if(show)setGroup(items.some(item=>item.import_action==='pending')?'pending':'new');},[show]);
   if (!show) return null;
   const groupOf = e => e.import_action==='pending' ? 'pending' : e.import_action==='skip' ? 'skip' : e.import_action?.startsWith('match:') ? 'match' : 'new';
   const skipped = items.filter(e => e.import_action === 'skip');
@@ -773,10 +772,7 @@ function Finance() {
       const latest=await api.getAllEntries();
       if(!Array.isArray(latest))throw new Error("Não foi possível conferir os lançamentos existentes. Atualize antes de importar.");
       setAllEntries(latest);
-      setImportItems(items.map(item=>({...item,import_action:
-        latest.some(e=>item.bank && item.source_id && ((e.bank===item.bank && e.source_id===item.source_id) || e.reconciliation?.imports?.some(s=>s.bank===item.bank && s.source_id===item.source_id))) ? 'skip' :
-        reconciliationCandidates(item,latest).length || /fatura|pagamento.*cart[aã]o/i.test(item.description) || !item.source_id ? 'pending' : 'new'
-      })));
+      setImportItems(planStatementImport(items,latest,paymentMethod));
       setImportStatus(balanceMessage+`${items.length} movimentações lidas. Revise e confirme os lançamentos; eles ainda não foram gravados.`);
     }catch(err){setImportStatus(err.message||"Erro ao ler o arquivo.");showToast(err.message||"Erro ao ler o arquivo.");}
   };
