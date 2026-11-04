@@ -6,7 +6,7 @@ import { travelDetails, dashboardCategory, travelCategory, TRAVEL_FOOD_CATEGORY,
 import { monthlyViews, monthlyTotals, paymentMethod } from "./monthly-views.js";
 import { normalizeEntryForm, recurrenceCount } from "./entry-form.js";
 import { extractStatementBalances, extractUnicredBalance, statementAccount, statementBank } from "./statement-balances.js";
-import { detectImportFormat, parseImportJSON } from "./import.js";
+import { detectImportFormat, parseImportJSON, parseUnicredCardCSV } from "./import.js";
 import { cardDetails, purchaseCosts, installmentSchedule, reconciliationCandidates, hasSource, planStatementImport, isCardPayment, dashboardEntries } from "../lib/card.js";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -446,6 +446,9 @@ function ImportModal({ show, onClose, items, onConfirm, onChange, existing, savi
       <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
         {[['pending','Dúvidas'],['new','Novos'],['match','Vínculos'],['skip','Já importados / ignorados'],['all','Todos']].map(([key,label])=><button key={key} style={S.btn(group===key)} onClick={()=>setGroup(key)}>{label} ({key==='all'?items.length:items.filter(e=>groupOf(e)===key).length})</button>)}
       </div>
+      {items[0]?.reconciliation?.invoice && <p style={{color:'#aab9cb',marginBottom:12}}>
+        Fatura Unicred · {items[0].reconciliation.invoice.cycle.split('-').reverse().join('/')} · Total líquido no arquivo {fmt(items.reduce((sum,item)=>sum+(item.type==='expense'?1:-1)*Math.round(item.amount*100),0)/100)}
+      </p>}
       <p style={{color:'#aab9cb',marginBottom:12}}>Novos lançamentos serão acrescentados ao confirmar. Vincular confere seu registro sem somar novamente e preserva categoria e viagem.</p>
       {group==='pending' && !items.some(e=>groupOf(e)==='pending') && <p style={{color:'#53d6a0',marginBottom:12}}>Nenhuma dúvida pendente. Confira os novos e os valores ignorados antes de confirmar.</p>}
       {skipped.length > 0 && <section aria-label="Valores fora da importação" style={{border:'1px solid #ffce85',padding:12,borderRadius:8,marginBottom:12}}>
@@ -777,7 +780,7 @@ function Finance() {
         parseItems=()=>parseUnicredRows(rows,autoCategory);
       }else{
         const content=await file.text();snapshots=extractStatementBalances(content,{name:file.name});
-        parseItems=()=>format==='ofx'?parseOFX(content):format==='csv'?parseCSV(content):parseImportJSON(content);
+        parseItems=()=>format==='ofx'?parseOFX(content):format==='csv'?(parseUnicredCardCSV(content,file.name,autoCategory)??parseCSV(content)):parseImportJSON(content);
       }
       let savedBalances=0;
       for(const snapshot of snapshots.filter(s=>!s.needs_date)){
