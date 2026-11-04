@@ -67,3 +67,18 @@ test('Retirar e restaurar uma conta duplicada preserva o histórico e as outras 
   assert.equal((await db.query('SELECT count(*)::int AS total FROM bank_balance_snapshots')).rows[0].total,4);
  }finally{await db.close();}
 });
+
+test('fechamento mensal usa a última posição até a meia-noite de Brasília',async()=>{
+ const db=new PGlite();
+ const sql=(strings,...values)=>db.query(strings.reduce((s,p,i)=>s+(i?`$${i}`:'')+p,''),values);
+ try{
+  const base={bank:'Caixa',account:'1234',balance:500,as_of:'2025-11-01T02:59:59Z'};
+  const closing=await recordBalance(base,sql);
+  await recordBalance({...base,balance:300,as_of:'2025-11-01T03:00:00Z'},sql);
+  assert.equal((await listBalances(sql,'2025-10-31')).checking_total,500);
+  assert.equal((await listBalances(sql,'2025-11-30')).checking_total,300);
+  assert.equal((await listBalances(sql,'2025-09-30')).checking_total,null);
+  await setBalanceExcluded({id:String(closing.snapshot.id),excluded:true},sql,'2025-10-31');
+  assert.equal((await listBalances(sql,'2025-10-31')).checking_total,null);
+ }finally{await db.close();}
+});

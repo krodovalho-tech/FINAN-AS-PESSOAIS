@@ -501,7 +501,10 @@ function Finance() {
   const [showTrips,setShowTrips]=useState(false);
   const [filterDestination,setFilterDestination]=useState("");
   const [budgets, setBudgets]       = useState({});
-  const [bankBalances,setBankBalances]=useState([]);
+  const balanceCutoff=new Date(Date.UTC(year,month+1,0)).toISOString().slice(0,10);
+  const [balanceView,setBalanceView]=useState(null);
+  const balanceRequest=useRef(0);
+  const bankBalances=balanceView?.cutoff===balanceCutoff ? balanceView.balances : [];
   const [excludedBalances,setExcludedBalances]=useState([]);
   const [balanceForm,setBalanceForm]=useState({bank:"Caixa",account:"",kind:"checking",balance:"",as_of:today});
   const [pendingStatementBalances,setPendingStatementBalances]=useState([]);
@@ -559,13 +562,20 @@ function Finance() {
     } catch (err) { setSyncError(err.message); }
   }, []);
 
-  const loadBankBalances=useCallback(async()=>{try{const data=await api.getBankBalances();setBankBalances(data.balances||[]);setExcludedBalances(data.excluded_balances||[]);}catch(err){setSyncError(err.message);}},[]);
+  const loadBankBalances=useCallback(async()=>{
+    const requestId=++balanceRequest.current;
+    try {
+      const data=await api.getBankBalances(balanceCutoff);
+      if(requestId!==balanceRequest.current)return;
+      setBalanceView({cutoff:balanceCutoff,balances:data.balances||[]});
+      setExcludedBalances(data.excluded_balances||[]);
+    } catch(err) { if(requestId===balanceRequest.current)setSyncError(err.message); }
+  },[balanceCutoff]);
   const changeBalanceInclusion=async(position,excluded)=>{
     setBalanceBusy(true);
     try {
-      const result=await api.setBalanceExcluded(position.id,excluded);
-      setBankBalances(result.balances);
-      setExcludedBalances(result.excluded_balances);
+      await api.setBalanceExcluded(position.id,excluded,balanceCutoff);
+      await loadBankBalances();
       showToast(excluded?'Posição retirada dos totais. O histórico foi preservado.':'Posição restaurada nos totais.');
     } catch(err) { setSyncError(err.message); }
     finally { setBalanceBusy(false); }
@@ -773,8 +783,9 @@ function Finance() {
       for(const snapshot of snapshots.filter(s=>!s.needs_date)){
         const result=await api.saveBankBalance(snapshot);
         if(!result.saved||!result.verified)throw new Error('Não foi possível conferir o saldo do extrato.');
-        savedBalances++;setBankBalances(result.balances || []);
+        savedBalances++;
       }
+      if(savedBalances)await loadBankBalances();
       setPendingStatementBalances(snapshots.filter(s=>s.needs_date).map(s=>({...s,as_of:''})));
       const balanceMessage=savedBalances?`${savedBalances} saldo(s) registrado(s) pela data do extrato. `:snapshots.some(s=>s.needs_date)?'O saldo aguarda confirmação da data de referência abaixo. ':'Arquivo sem saldo final ou data identificável; saldos preservados. ';
       try{items=parseItems();}catch(error){setImportStatus(balanceMessage+error.message);showToast(balanceMessage+error.message);return;}
@@ -916,7 +927,7 @@ function Finance() {
         </section>}
         {view==='dashboard' && <section style={{...S.card,marginBottom:16}}>
           <h2 style={{fontSize:'1.1rem',marginBottom:12}}>Dinheiro em contas e aplicações</h2>
-          <p style={{color:'#aab9cb',fontSize:13,marginBottom:14}}>Posições informadas nos extratos, com a data de referência de cada conta. Cheque especial não entra no saldo. Atualizações de saldo não criam receitas ou despesas.</p>
+          <p style={{color:'#aab9cb',fontSize:13,marginBottom:14}}>Última posição registrada até {balanceCutoff.split('-').reverse().join('/')}. Confira a data de referência de cada conta. Cheque especial não entra no saldo.</p>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
             {['checking','investment'].map(kind=>{const positions=bankBalances.filter(b=>(b.kind || 'checking')===kind);return <div key={kind} style={{background:'#10151d',padding:16,border:'1px solid #35465c',borderRadius:10}}>
               <p style={S.label}>{kind==='checking'?'Disponível em contas':'Dinheiro aplicado'}</p>
@@ -946,7 +957,7 @@ function Finance() {
           {pendingStatementBalances.map((s,i)=><div key={`${s.bank}-${s.account}`} style={{marginTop:16,padding:12,border:'1px solid #c8c87e',borderRadius:8}}>
             <p>{s.bank} · conta {s.account} · saldo {fmt(s.balance)}</p><p style={{color:'#aab9cb',fontSize:13,margin:'8px 0'}}>O arquivo indica uma data futura ({String(s.reported_as_of).slice(0,10).split('-').reverse().join('/')}). Confirme a data de referência real do saldo para registrá-lo.</p>
             <input aria-label={`Data de referência ${s.bank}`} type="date" max={today} style={S.input} value={s.as_of} onChange={e=>setPendingStatementBalances(items=>items.map((item,n)=>n===i?{...item,as_of:e.target.value}:item))}/>
-            <button style={{...S.btn(true),marginTop:10}} disabled={saving||!s.as_of} onClick={()=>saveSafely(async()=>{const {needs_date,reported_as_of,...snapshot}=s;const result=await api.saveBankBalance(snapshot);if(!result.saved||!result.verified)throw new Error('Saldo não confirmado.');setBankBalances(result.balances);setPendingStatementBalances(items=>items.filter((_,n)=>n!==i));showToast('Saldo registrado na data confirmada.');})}>Confirmar data e registrar saldo</button>
+            <button style={{...S.btn(true),marginTop:10}} disabled={saving||!s.as_of} onClick={()=>saveSafely(async()=>{const {needs_date,reported_as_of,...snapshot}=s;const result=await api.saveBankBalance(snapshot);if(!result.saved||!result.verified)throw new Error('Saldo não confirmado.');await loadBankBalances();setPendingStatementBalances(items=>items.filter((_,n)=>n!==i));showToast('Saldo registrado na data confirmada.');})}>Confirmar data e registrar saldo</button>
           </div>)}
         </section>}
         {view==='dashboard' && <div style={{...S.card,marginBottom:16}}>
