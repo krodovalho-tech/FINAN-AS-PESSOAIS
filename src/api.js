@@ -17,6 +17,7 @@ export const api = {
   bulkInsert:entries=>send('entries','PATCH',{entries:entries.map(e=>paymentPayload(travelPayload(e)))}),
   editRecurring:(id,entry)=>send('recurring','POST',{action:'edit',id,entry:travelPayload(entry)}),
   getBankBalances:()=>request('bank-balances'),
+  setBalanceExcluded:(id,excluded)=>send('bank-balances','PATCH',{id:String(id),excluded}),
   saveBankBalance:snapshot=>send('bank-balances','POST',snapshot),
   getTrips:()=>request('trips'),
   addTrip:trip=>send('trips','POST',trip),

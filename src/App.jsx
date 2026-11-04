@@ -503,6 +503,7 @@ function Finance() {
   const [filterDestination,setFilterDestination]=useState("");
   const [budgets, setBudgets]       = useState({});
   const [bankBalances,setBankBalances]=useState([]);
+  const [excludedBalances,setExcludedBalances]=useState([]);
   const [balanceForm,setBalanceForm]=useState({bank:"Caixa",account:"",kind:"checking",balance:"",as_of:today});
   const [pendingStatementBalances,setPendingStatementBalances]=useState([]);
   const [balanceBusy,setBalanceBusy]=useState(false);
@@ -559,7 +560,17 @@ function Finance() {
     } catch (err) { setSyncError(err.message); }
   }, []);
 
-  const loadBankBalances=useCallback(async()=>{try{const data=await api.getBankBalances();setBankBalances(data.balances||[]);}catch(err){setSyncError(err.message);}},[]);
+  const loadBankBalances=useCallback(async()=>{try{const data=await api.getBankBalances();setBankBalances(data.balances||[]);setExcludedBalances(data.excluded_balances||[]);}catch(err){setSyncError(err.message);}},[]);
+  const changeBalanceInclusion=async(position,excluded)=>{
+    setBalanceBusy(true);
+    try {
+      const result=await api.setBalanceExcluded(position.id,excluded);
+      setBankBalances(result.balances);
+      setExcludedBalances(result.excluded_balances);
+      showToast(excluded?'Posição retirada dos totais. O histórico foi preservado.':'Posição restaurada nos totais.');
+    } catch(err) { setSyncError(err.message); }
+    finally { setBalanceBusy(false); }
+  };
   const saveBalance=async()=>{
     setBalanceBusy(true);
     try {const result=await api.saveBankBalance({...balanceForm,balance:Number(balanceForm.balance.replace(',','.')),source:'Registro manual'});if(!result.saved||!result.verified)throw new Error('O saldo não recebeu confirmação de gravação.');await loadBankBalances();showToast(result.is_latest?'Saldo registrado sem criar receita ou despesa.':'Saldo histórico registrado; posição mais recente preservada.');}
@@ -914,10 +925,17 @@ function Finance() {
             {['checking','investment'].map(kind=>{const positions=bankBalances.filter(b=>(b.kind || 'checking')===kind);return <div key={kind} style={{background:'#10151d',padding:16,border:'1px solid #35465c',borderRadius:10}}>
               <p style={S.label}>{kind==='checking'?'Disponível em contas':'Dinheiro aplicado'}</p>
               <strong style={{display:'block',fontSize:'1.5rem',color:kind==='checking'?'#75b8ff':'#53d6a0',marginTop:8}}>{positions.length?fmt(positions.reduce((sum,b)=>sum+Number(b.balance),0)):'Não informado'}</strong>
-              {positions.map(b=><div key={`${b.bank}-${b.account}-${kind}`} style={{paddingTop:12,marginTop:12,borderTop:'1px solid #35465c'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}><span>{b.bank}{b.account?` · ${kind==='checking'?'conta ':''}${b.account}`:''}</span><strong>{fmt(b.balance)}</strong></div><small style={{color:'#aab9cb'}}>Referência: {new Date(b.as_of).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})}</small></div>)}
+              {positions.map(b=><div key={`${b.bank}-${b.account}-${kind}`} style={{paddingTop:12,marginTop:12,borderTop:'1px solid #35465c'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}><span>{b.bank}{b.account?` · ${kind==='checking'?'conta ':''}${b.account}`:''}</span><strong>{fmt(b.balance)}</strong></div><small style={{color:'#aab9cb'}}>Referência: {new Date(b.as_of).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'})}</small><div style={{marginTop:8}}><button style={S.btn(false)} disabled={balanceBusy} onClick={()=>changeBalanceInclusion(b,true)}>Retirar dos totais</button></div></div>)}
             </div>;})}
             <div style={{background:'#10151d',padding:16,border:'1px solid #35465c',borderRadius:10}}><p style={S.label}>Total registrado · contas + aplicações</p><strong style={{display:'block',fontSize:'1.5rem',color:'#75b8ff',marginTop:8}}>{bankBalances.length?fmt(bankBalances.reduce((sum,b)=>sum+Number(b.balance),0)):'Aguardando extrato'}</strong>{!bankBalances.some(b=>b.kind==='investment')&&<p style={{color:'#aab9cb',fontSize:12,marginTop:10}}>Saldo das aplicações ainda não informado.</p>}</div>
           </div>
+          {excludedBalances.length>0&&<details style={{marginBottom:12}}>
+            <summary style={{cursor:'pointer',color:'#75b8ff'}}>Posições fora dos totais ({excludedBalances.length})</summary>
+            {excludedBalances.map(b=><div key={b.id} style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginTop:8}}>
+              <span>{b.bank} · {b.account||'Sem identificação'} · {b.kind==='investment'?'Aplicação':'Conta'} · {fmt(b.balance)}</span>
+              <button style={S.btn(false)} disabled={balanceBusy} onClick={()=>changeBalanceInclusion(b,false)}>Restaurar nos totais</button>
+            </div>)}
+          </details>}
           <details>
             <summary style={{cursor:'pointer',color:'#75b8ff'}}>Registrar ou atualizar saldo manualmente</summary>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:10,marginTop:14}}>
