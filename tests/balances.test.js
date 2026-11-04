@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {extractStatementBalances,extractUnicredBalance,statementDate} from '../src/statement-balances.js';
-import {recordBalance,listBalances,balanceInput} from '../lib/balances.js';
+import {recordBalance,listBalances,balanceInput,setBalanceExcluded} from '../lib/balances.js';
 import {detectImportFormat} from '../src/import.js';
 const now=new Date('2026-10-24T18:00:00Z');
 const ofc=`<OFC><ACCTSTMT><ACCTFROM><BANKID>00104<ACCTID>0001234</ACCTFROM><STMTRS><DTSTART>20261001<DTEND>20261024<LEDGER>100.25<STMTTRN><TRNAMT>-20</STMTTRN></STMTRS></ACCTSTMT></OFC>`;
@@ -39,5 +39,31 @@ test('Postgres: posição por conta e aplicação, histórico, idempotência e n
   assert.deepEqual((await db.query('SELECT * FROM entries')).rows,[{id:1,amount:'50'}]);
   for(const patch of [{balance:null},{balance:false},{balance:0.001},{as_of:'2026-02-30'},{as_of:'2099-01-01'},{balance:-1,kind:'investment'}])assert.throws(()=>balanceInput({...base,...patch},now));
   assert.equal(balanceInput({...base,balance:0},now).balance,0);
+ }finally{await db.close();}
+});
+
+test('Retirar e restaurar uma conta duplicada preserva o histórico e as outras contas',async()=>{
+ const db=new PGlite();
+ const sql=(strings,...values)=>db.query(strings.reduce((s,p,i)=>s+(i?`$${i}`:'')+p,''),values);
+ try{
+  const base={bank:'Unicred',account:'134279',balance:7234.58,as_of:'2025-10-31'};
+  const alias={...base,account:'Conta final 4279'};
+  await recordBalance(base,sql);
+  await recordBalance({...alias,as_of:'2025-10-01'},sql);
+  const duplicate=await recordBalance(alias,sql);
+  const id=String(duplicate.snapshot.id);
+  assert.equal(duplicate.checking_total,14469.16);
+  for(let i=0;i<2;i++){
+   const result=await setBalanceExcluded({id,excluded:true},sql);
+   assert.equal(result.checking_total,7234.58);
+   assert.equal(result.excluded_balances.length,1);
+  }
+  const later=await recordBalance({...alias,as_of:'2025-11-01'},sql);
+  assert.equal(later.checking_total,7234.58);
+  await assert.rejects(setBalanceExcluded({id,excluded:false},sql),{status:409});
+  const restored=await setBalanceExcluded({id:String(later.snapshot.id),excluded:false},sql);
+  assert.equal(restored.checking_total,14469.16);
+  assert.deepEqual(restored.excluded_balances,[]);
+  assert.equal((await db.query('SELECT count(*)::int AS total FROM bank_balance_snapshots')).rows[0].total,4);
  }finally{await db.close();}
 });
