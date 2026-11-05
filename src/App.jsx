@@ -1,3 +1,4 @@
+import { DailyCashFlow } from './DailyCashFlow.jsx';
 import { normalizeFoodCategory } from './food-categories.js';
 import { parseUnicredRows } from "./unicred-pdf.js";
 import "./responsive.css";
@@ -989,6 +990,9 @@ function Finance() {
           {knownTrips.map(t=><p key={t.destination} style={{marginTop:10}}>{t.destination}: <strong style={{color:'#75b8ff'}}>{fmt(purchaseCosts(allEntries).filter(e=>travelDetails(e).destination===t.destination).reduce((sum,e)=>sum+Number(e.amount),0))}</strong></p>)}
           {!knownTrips.length && <p>Selecione um destino ao lançar a despesa.</p>}
         </div>}
+
+        {view==='dashboard' && <DailyCashFlow key={balanceCutoff} balances={bankBalances}
+          commitments={monthViews.commitments} monthEnd={balanceCutoff} styles={S}/>}
 
         {/* ── KPIs ── */}
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
