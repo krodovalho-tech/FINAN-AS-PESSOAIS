@@ -537,6 +537,8 @@ function Finance() {
   const [showAdd, setShowAdd]       = useState(false);
   const [editEntry, setEditEntry]   = useState(null);
   const [detailCategory, setDetailCategory] = useState(null);
+  const [detailTotal, setDetailTotal] = useState(null);
+  const closeDetails = () => { setDetailCategory(null); setDetailTotal(null); };
   const [delConfirm, setDelConfirm] = useState(null);
   const [showRecurring, setShowRecurring] = useState(false);
   const [showCommitments,setShowCommitments]=useState(false);
@@ -690,7 +692,7 @@ function Finance() {
   const pieData = Object.entries(byCat).filter(([,v])=>v.expense>0).map(([name,v])=>({ name, value:v.expense })).sort((a,b)=>b.value-a.value);
   const barData = Object.entries(byCat).map(([name,v])=>({ name, Receita:v.income, Despesa:v.expense })).sort((a,b)=>b.Despesa-a.Despesa);
 
-  const detailEntries = dashboardMonth.filter(e=>dashboardCategory(e)===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const detailEntries = dashboardMonth.filter(e=>detailTotal ? e.type===detailTotal.type : dashboardCategory(e)===detailCategory).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 
   // Budget alerts
   const budgetAlerts = useMemo(() => Object.entries(budgets).map(([cat,lim])=>{ const spent=byCat[cat]?.expense||0; const ratio=spent/lim; return { cat, lim, spent, ratio }; }).filter(b=>b.ratio>=0.7).sort((a,b)=>b.ratio-a.ratio), [budgets,byCat]);
@@ -991,22 +993,30 @@ function Finance() {
         {/* ── KPIs ── */}
         <div className="kpi-grid" style={{ display:"grid", gap:"0.8rem", marginBottom:"1.2rem" }}>
           {[
-            { label:"Receitas",       value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
-            { label:dashboardMode==="commitments"?"Comprometido no mês":dashboardMode==="cash"?"Gastos fora do crédito":"Compras no mês", value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
+            { label:"Receitas", type:"income", value:totalIncome,  prev:prevIncome,  icon:<TrendingUp size={17}/>,   color:"#53d6a0" },
+            { label:dashboardMode==="commitments"?"Comprometido no mês":dashboardMode==="cash"?"Gastos fora do crédito":"Compras no mês", type:"expense", value:totalExpense, prev:prevExpense, icon:<TrendingDown size={17}/>, color:"#ff929b" },
             { label:dashboardMode==="commitments"?"Receitas menos compromissos":"Resultado da visão", value:balance,      prev:null,        icon:<DollarSign size={17}/>,   color:balance>=0?"#75b8ff":"#ff929b" },
             { label:"Resultado / receitas", value:null, display:`${savingsRate}%`, icon:<BarChart3 size={17}/>, color:savingsRate>=20?"#53d6a0":savingsRate>=0?"#75b8ff":"#ff929b" },
-          ].map((k,i)=>(
-            <div key={i} style={S.card}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.5rem" }}>
-                <span style={{ ...S.label, fontSize:"0.68rem" }}>{k.label}</span>
-                <span style={{ color:k.color }}>{k.icon}</span>
-              </div>
-              <div style={{ fontSize:"clamp(1.35rem, 4vw, 2rem)", fontWeight:"700", fontVariantNumeric:"tabular-nums", color:k.color, fontFamily:"'Source Sans 3',sans-serif" }}>
-                {k.display ?? fmt(k.value)}
-              </div>
-              {k.prev !== null && <DeltaBadge curr={k.value} prev={k.prev}/>}
-            </div>
-          ))}
+          ].map(k=>{
+            const Card = k.type ? 'button' : 'div';
+            return (
+              <Card key={k.label} type={k.type?'button':undefined}
+                aria-label={k.type?`${k.label}: ${fmt(k.value)}. Ver lançamentos`:undefined}
+                aria-haspopup={k.type?'dialog':undefined}
+                onClick={k.type?()=>setDetailTotal({type:k.type,label:k.label}):undefined}
+                style={k.type?{...S.card,textAlign:'left',font:'inherit',cursor:'pointer',minWidth:0}:S.card}>
+                <span style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.5rem" }}>
+                  <span style={{ ...S.label, fontSize:"0.68rem" }}>{k.label}</span>
+                  <span style={{ color:k.color }}>{k.icon}</span>
+                </span>
+                <span style={{ display:'block',fontSize:"clamp(1.35rem, 4vw, 2rem)", fontWeight:"700", fontVariantNumeric:"tabular-nums", color:k.color, fontFamily:"'Source Sans 3',sans-serif" }}>
+                  {k.display ?? fmt(k.value)}
+                </span>
+                {k.prev !== null && <DeltaBadge curr={k.value} prev={k.prev}/>}
+                {k.type && <span style={{display:'block',color:'#75b8ff',fontSize:'0.78rem',marginTop:8}}>Ver lançamentos</span>}
+              </Card>
+            );
+          })}
         </div>
 
         {/* ── BUDGET ALERTS ── */}
@@ -1226,21 +1236,22 @@ function Finance() {
 
       <BudgetModal show={showBudgets} onClose={()=>setShowBudgets(false)} onSave={(cat,amt)=>saveSafely(()=>handleBudgetSave(cat,amt))} onDelete={cat=>saveSafely(()=>handleBudgetDelete(cat))} budgets={budgets}/>
 
-      <Modal show={detailCategory!==null} onClose={()=>setDetailCategory(null)} maxWidth={600}>
-        <h2 style={{fontSize:"1.1rem",marginBottom:8,overflowWrap:"anywhere"}}>{detailCategory}</h2>
+      <Modal show={detailCategory!==null || detailTotal!==null} onClose={closeDetails} maxWidth={600}>
+        <h2 style={{fontSize:"1.1rem",marginBottom:8,overflowWrap:"anywhere"}}>{detailTotal?.label ?? detailCategory}</h2>
         <p style={{color:"#b6c4d6",marginBottom:16}}>{MONTHS[month]} / {year} · {detailEntries.length} lançamento(s)</p>
-        <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>
+        {detailTotal ? <p style={{marginBottom:16}}>Total: {fmt(detailTotal.type==='income'?totalIncome:totalExpense)}</p> : <p style={{marginBottom:16}}>Despesas: {fmt(detailEntries.filter(e=>e.type==="expense" && !isCardPayment(e)).reduce((sum,e)=>sum+Number(e.amount),0))} · Receitas: {fmt(detailEntries.filter(e=>e.type==="income").reduce((sum,e)=>sum+Number(e.amount),0))}</p>}
         <div style={{maxHeight:"55vh",overflowY:"auto"}}>
-          {detailEntries.length===0 && <p>Nenhum lançamento nesta categoria no mês selecionado.</p>}
+          {detailEntries.length===0 && <p>Nenhum lançamento no mês e na visão selecionados.</p>}
           {detailEntries.map(e=><article key={e.id || e.source_id} style={{padding:"14px 0",borderBottom:"1px solid #35465c",overflowWrap:"anywhere"}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><strong>{e.description}</strong><strong style={{color:e.type==="expense"?"#ff929b":"#53d6a0"}}>{e.type==="expense"?"−":"+"}{fmt(e.amount)}</strong></div>
             <p style={{color:"#b6c4d6",marginTop:6}}>{String(e.date).slice(0,10).split("-").reverse().join("/")} {e.bank && `· ${e.bank}`}</p>
+            {detailTotal && <p style={{color:'#aab9cb'}}>{dashboardCategory(e)}{e.projection ? ' · Previsão recorrente' : ''}</p>}
             <p style={{marginTop:8,whiteSpace:"pre-wrap"}}>Observações: {e.notes || "Sem observações"}</p>
             {e.card && <p style={{color:'#aab9cb'}}>Valor completo da compra · a edição abaixo abre a parcela cadastrada.</p>}
-            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{setDetailCategory(null);setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?"Editar recorrência original":"Editar lançamento / observações"}</button>
+            <button style={{...S.btn(false),marginTop:10}} onClick={()=>{closeDetails();setEditEntry(allEntries.find(original=>original.id===(e.projection?e.root_id:e.id)) || e);}}>{e.projection?"Editar recorrência original":"Editar lançamento / observações"}</button>
           </article>)}
         </div>
-        <button style={{...S.btn(false),marginTop:16}} onClick={()=>setDetailCategory(null)}>Fechar</button>
+        <button style={{...S.btn(false),marginTop:16}} onClick={closeDetails}>Fechar</button>
       </Modal>
 
       {/* Delete confirm */}
