@@ -619,7 +619,7 @@ function Finance() {
   const showToast = (msg, undo=null) => {
     clearTimeout(toastTimer.current);
     setToast(msg);
-    setUndoPayload(undo);
+    setUndoPayload(() => undo);
     toastTimer.current = setTimeout(()=>{ setToast(null); setUndoPayload(null); }, 4000);
   };
 
